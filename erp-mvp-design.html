@@ -143,7 +143,7 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
 <section id="s0">
   <h1 style="font-size:24px;margin-bottom:6px">仓储进销存 ERP — MVP 详细设计文档</h1>
   <div class="meta">
-    <span>版本 <b>v1.1（评审更新：含七轮评审意见）</b></span><span>日期 <b>2026-10-15</b></span>
+    <span>版本 <b>v1.2（评审更新：含八轮评审意见）</b></span><span>日期 <b>2026-10-15</b></span>
     <span>形态 <b>单体 NestJS + PG / Vue3 双端</b></span><span>多租户 <b>本期不含，代码预留</b></span>
   </div>
   <p>本文档整合此前所有设计结论，作为 MVP 开发的唯一依据。评审通过后按第 14 节里程碑推进。参考对象：jshERP（单据-流水绑定、进销存口径）、ERPNext（文档生命周期、价格表、Stock Ledger 结余）。</p>
@@ -261,13 +261,23 @@ CREATE TABLE materials (
   model VARCHAR(50), spec VARCHAR(100),     -- 型号 / 规格（3寸/孔距96）
   brand VARCHAR(50), color VARCHAR(30), mfrs VARCHAR(50),
   weight NUMERIC(10,3), barcode VARCHAR(50),-- 重量kg / 条码（拣货扫码）
-  min_unit_qty NUMERIC(14,3),               -- 最小销售单元数量（12=1打）
+  min_unit_qty NUMERIC(14,3),               -- （废弃，改用 material_packages）
   piece_enabled BOOLEAN NOT NULL DEFAULT FALSE,     -- 启用计件
   output_material_id BIGINT,                -- 加工产出映射（半成品→成品）
   last_purchase_price NUMERIC(14,4),        -- 采购参考价
   image_url VARCHAR(300), ext_props JSONB, remark VARCHAR(500),
   status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
 );
+CREATE TABLE material_packages (            -- 包装单元（成品：件/袋/箱）
+  id BIGSERIAL PRIMARY KEY,
+  material_id BIGINT NOT NULL,
+  name VARCHAR(20) NOT NULL,                -- 件(基础) / 袋 / 箱
+  base_qty NUMERIC(14,3) NOT NULL CHECK (base_qty > 0),  -- 换算基础单位数量：1袋=100件
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,-- 下单默认包装
+  status SMALLINT NOT NULL DEFAULT 1,
+  UNIQUE(material_id, name)
+);
+-- 计价双模式：按件价换算（件价×base_qty，四舍五入到最后一步）或直接指定整包价（下单人可改，走改价权限+审计）
 -- 必填仅5项：编码/名称/分类/类型/单位；录入页"必填在上、选填折叠"
 CREATE TABLE warehouses (
   id BIGSERIAL PRIMARY KEY, code VARCHAR(30) NOT NULL UNIQUE,
@@ -294,7 +304,7 @@ CREATE TABLE customers (
   material_id BIGINT NOT NULL,
   customer_id  BIGINT,                      -- 空=按等级通用
   level        VARCHAR(2),                  -- 空=客户专属价（优先级最高）
-  min_unit_price NUMERIC(14,4),             -- min_unit 模式取此价
+  min_unit_price NUMERIC(14,4),             -- min_unit 模式取此价（元/件，整包价=件价×包装换算量）
   discount     NUMERIC(5,4),                -- discount 模式乘标准价
   priority     SMALLINT NOT NULL,           -- 1专属 2等级 3标准兜底
   effective_from DATE NOT NULL DEFAULT current_date,
@@ -335,10 +345,15 @@ CREATE INDEX idx_ledger_wm ON stock_ledger(warehouse_id, material_id, created_at
 );
 CREATE TABLE sales_order_items (
   id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL,
-  material_id BIGINT NOT NULL, qty NUMERIC(14,3) NOT NULL CHECK (qty > 0),
-  price NUMERIC(14,4) NOT NULL, discount NUMERIC(5,4),
-  amount NUMERIC(14,2) NOT NULL,             -- 快照：round(price*qty,2) 再折
-  price_source VARCHAR(15) NOT NULL           -- exclusive|level|fallback
+  material_id BIGINT NOT NULL,
+  package_id  BIGINT NOT NULL,                -- 包装（件/袋/箱），快照 package.name/base_qty
+  qty NUMERIC(14,3) NOT NULL CHECK (qty > 0), -- 按包装的下单数量（5袋）
+  base_qty NUMERIC(14,3) NOT NULL,            -- 基础单位数量=qty×换算（500件，库存联动用）
+  price NUMERIC(14,4) NOT NULL,               -- 单价：按所选包装（元/袋）
+  price_base NUMERIC(14,4),                   -- 参考件价（元/件，仅展示，避免混淆）
+  discount NUMERIC(5,4),
+  amount NUMERIC(14,2) NOT NULL,              -- 总价：round(price*qty,2) 再折（=该行金额）
+  price_source VARCHAR(15) NOT NULL           -- exclusive|level|fallback|manual(改价)
 );
 -- 退货 = 红字反向单：sales_returns / purchase_returns 结构同 items，
 -- 引用原单行 original_item_id，单价取原行快照，产生反向库存流水。</code></pre>
@@ -528,6 +543,7 @@ CREATE TABLE idempotency_records (
     <tr><td>API</td><td>字符串传输；前端仅展示时 format</td></tr>
     <tr><td>聚合</td><td>SUM/GROUP BY 一律 SQL 层完成，禁止 JS 循环累加</td></tr>
     <tr><td>取整</td><td>统一 ROUND_HALF_UP；行金额 = <code>round(round(单价×数量,2)×折扣,2)</code>，只在最终一步取整</td></tr>
+    <tr><td>包装换算</td><td>整包单价 = 件价 × 包装换算量（<code>Decimal</code> 精确乘，<b>换算与折扣过程中不取整</b>，仅最终金额取整）；库存一律按基础单位数量 <code>base_qty</code> 联动，包装数量仅展示层</td></tr>
     <tr><td>尾差</td><td>整单折扣分摊：最后一行 = 单据总额 − 已摊行合计</td></tr>
     <tr><td>防负库存</td><td>事务内条件更新：<code>UPDATE stock SET qty=qty-$n WHERE ... AND qty&gt;=$n RETURNING qty</code>，0 行即回滚报 1301</td></tr>
   </table>
@@ -552,7 +568,7 @@ CREATE TABLE idempotency_records (
     <tr><td>基础数据</td><td>产品分类 / 物料 / 仓库 / 客户 / 供应商 / 员工 / 工价 / 价格规则</td><td>乐观锁冲突提示刷新；停用不删除；产品详情抽屉含各仓分布+近期流水+各等级价；计件可见范围编辑（选员工/选标签）；期初库存入口（仅启用初期）</td></tr>
     <tr><td>库存</td><td>库存总览（三视图）/ 流水 / 调拨</td><td>统一查询规范；流水按仓库+物料+业务类型+时间筛选，显示结余列与期初期末</td></tr>
     <tr><td>采购</td><td>采购入库 / 采购退货</td><td>关联供应商；入库即产生流水</td></tr>
-    <tr><td>销售</td><td>销售订单 / 拣货 / 销售退货</td><td>订单明细价格自动带出（等级计价，draft 可改价需权限+审计，confirm 锁定）；拣货页打印拣货单→确认出库</td></tr>
+    <tr><td>销售</td><td>销售订单 / 拣货 / 销售退货</td><td>明细行选择包装（件/袋/箱）自动换算；<b>列头强制区分：数量(含包装名，如"5袋")/单价(元/袋)/总价(元)，参考件价灰字辅助</b>；合计行 SQL 聚合；价格自动带出（等级计价，draft 可改价需权限+审计，confirm 锁定）；拣货页打印拣货单→确认出库</td></tr>
     <tr><td>加工</td><td>配送单（发料管理）</td><td>发料出库→员工仓在制；打印配送单</td></tr>
     <tr><td>计件</td><td>报工审核 / 记录查询 / 统计报表</td><td>审核页显示照片、行级改数量（原因必填）；报表四视图（明细/按员工/按物料/员工×月矩阵），SQL 聚合+导出</td></tr>
     <tr><td>账单</td><td>账单 / 收款 / 预警中心 / 通知中心</td><td>账单明细穿透销售订单；通知列表点击穿透单据</td></tr>
@@ -658,7 +674,7 @@ CREATE TABLE idempotency_records (
   <table>
     <tr><th>模板 code</th><th>纸张/设备</th><th>要素</th></tr>
     <tr><td><code>pick_list</code></td><td>A4 激光 或 80mm 热敏</td><td>单号/库位/物料编码名称/应拣数量/条码（拣货扫码核对）</td></tr>
-    <tr><td><code>duplicate_note</code></td><td>针式 LQ-630K · 连续纸二联复写（白联客户/红联存根）</td><td>客户信息/明细/金额大写/签字栏；<b>打一遍自然复写</b></td></tr>
+    <tr><td><code>duplicate_note</code></td><td>针式 LQ-630K · 连续纸二联复写（白联客户/红联存根）</td><td>客户信息/明细四列：<b>数量(含包装"5袋")/单价(元/袋)/总价(元)</b>/金额大写/签字栏；<b>打一遍自然复写</b></td></tr>
     <tr><td><code>delivery_note</code></td><td>针式或热敏</td><td>加工任务/员工地址/发料数量/签收栏</td></tr>
   </table>
   <ul>
@@ -697,7 +713,7 @@ CREATE TABLE idempotency_records (
   </ul>
   <h3>12.3 安全</h3>
   <ul>
-    <li>bcrypt(cost≥10)；初始密码 = 固定前缀 + 4 位随机；首登强制改密（未改完拦截所有业务接口）</li>
+    <li>bcrypt(cost≥10)；<b>初始密码 = 6 位数字</b>（管理员建号/重置时下发）；<b>用户自设密码 ≥8 位，不限纯数字或纯字母</b>（无复杂度强制）；首登强制改密（未改完拦截所有业务接口）</li>
     <li>重置密码 → token_version+1 → 旧 token 全失效；登录失败 5 次锁 15 分钟；登录限流</li>
     <li>密钥只在后端 .env（git 忽略 + example 模板）；前端零密钥</li>
     <li>审计日志覆盖：计件审核、红冲、改价、重置密码、库存调整、作废（before/after JSON）</li>
@@ -725,10 +741,10 @@ CREATE TABLE idempotency_records (
     <tr><td>M3 加工+计件+移动端</td><td>配送单（发料）、报工单（员工自主多行）、审核（行级改数量）、计件工资、移动端（报工/工钱/审核/通知）</td><td>审核事务原子性验证（库存联动+计件入账+通知）；弱网断点提交不丢数据；计件产品白名单不泄露价格</td></tr>
     <tr><td>M4 账单+预警</td><td>月度账单、收款、账期/发货预警、备份恢复演练</td><td>预警 cron 幂等不重发；恢复演练通过</td></tr>
   </table>
-  <div class="callout c-ok" style="margin-top:16px"><b>v1.1 评审更新摘要（七轮意见全部并入）：</b>① 报工单模型重做：员工自主多行报工、审核行级改数量（原因必填）、approved 锁定、作废红冲、提交前可撤回 ② 计件产品白名单可见（指定账号/员工标签，防价格泄露）③ 产品/仓库通用字段铺开（对照 jshERP：分类树/型号/规格/品牌/条码等，选填留空，必填仅 5 项）④ 统一三时间规范（biz_date/created_at/环节时间）⑤ 供应商档案 + 期初库存补缺 ⑥ 应用内通知（不做弹窗推送，预留公众号 emitter）⑦ 员工端极简化 + 统一查询规范 + 计件/库存报表。<b>待最终确认点：</b>角色矩阵（5.2）、状态机（6）、精度规则（8）、针式打印机到位、里程碑顺序。确认后启动 M1。</div>
+  <div class="callout c-ok" style="margin-top:16px"><b>v1.2 评审更新摘要（八轮意见全部并入）：</b>① 报工单模型重做：员工自主多行报工、审核行级改数量（原因必填）、approved 锁定、作废红冲、提交前可撤回 ② 计件产品白名单可见（指定账号/员工标签，防价格泄露）③ 产品/仓库通用字段铺开（对照 jshERP：分类树/型号/规格/品牌/条码等，选填留空，必填仅 5 项）④ 统一三时间规范（biz_date/created_at/环节时间）⑤ 供应商档案 + 期初库存补缺 ⑥ 应用内通知（不做弹窗推送，预留公众号 emitter）⑦ 员工端极简化 + 统一查询规范 + 计件/库存报表 ⑧ <b>包装单元体系</b>（material_packages：件/袋/箱，整包价=件价×换算或下单人改价；订单行区分 单价(元/包装)/总价，库存按 base_qty 联动）+ <b>密码策略简化</b>（初始 6 位数字；自设 ≥8 位不限组成）。<b>待最终确认点：</b>角色矩阵（5.2）、状态机（6）、精度规则（8）、针式打印机到位、里程碑顺序。确认后启动 M1。</div>
 </section>
 
-<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.1 · 2026-10-15 · 评审更新完毕</p>
+<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.2 · 2026-10-15 · 评审更新完毕</p>
 </main>
 </div>
 </body>
