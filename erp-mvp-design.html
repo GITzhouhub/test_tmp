@@ -143,7 +143,7 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
 <section id="s0">
   <h1 style="font-size:24px;margin-bottom:6px">仓储进销存 ERP — MVP 详细设计文档</h1>
   <div class="meta">
-    <span>版本 <b>v1.2（评审更新：含八轮评审意见）</b></span><span>日期 <b>2026-10-15</b></span>
+    <span>版本 <b>v1.3（评审更新：含九轮评审意见，设计冻结）</b></span><span>日期 <b>2026-10-15</b></span>
     <span>形态 <b>单体 NestJS + PG / Vue3 双端</b></span><span>多租户 <b>本期不含，代码预留</b></span>
   </div>
   <p>本文档整合此前所有设计结论，作为 MVP 开发的唯一依据。评审通过后按第 14 节里程碑推进。参考对象：jshERP（单据-流水绑定、进销存口径）、ERPNext（文档生命周期、价格表、Stock Ledger 结余）。</p>
@@ -164,8 +164,8 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
   <h3>1.2 MVP 包含 / 不包含</h3>
   <table>
     <tr><th style="width:90px">状态</th><th>内容</th></tr>
-    <tr><td><span class="tag t-green">包含</span></td><td>认证与账号（管理员建号/初始密码/强制改密/重置）、RBAC 权限、基础数据、库存核心、进销存单据、拣货+二联+配送打印、加工外发、计件工资、月度账单、账期/发货预警、操作审计、移动端员工功能（提交完工/我的工钱）、移动端单据查看</td></tr>
-    <tr><td><span class="tag t-gray">不包含</span></td><td>多租户（第 13 节预留）、库位管理（仅记录到仓库级，字段预留）、批次/序列号、自定义报表、字段级权限、盘点（MVP 用调拨盈亏单人工处理）、与电商/财务系统对接</td></tr>
+    <tr><td><span class="tag t-green">包含</span></td><td>认证与账号（管理员建号/初始密码/强制改密/重置）、RBAC 权限、基础数据、库存核心、进销存单据（含全部退货）、拣货+二联+配送打印、加工外发、计件工资、月度账单、账期/发货预警、<b>成本与毛利（移动加权平均 + 出库成本快照 + 毛利报表）</b>、<b>销售报表</b>、<b>客户期初欠款</b>、<b>供应商应付款（赊账/付款/应付报表）</b>、操作审计、移动端员工功能（提交完工/我的工钱）、移动端单据查看</td></tr>
+    <tr><td><span class="tag t-gray">不包含</span></td><td>多租户（第 13 节预留）、库位管理（仅记录到仓库级，字段预留）、批次/序列号、自定义报表、字段级权限、盘点（MVP 用调拨盈亏单人工处理）、与电商/财务系统对接、总账/凭证/税务模块</td></tr>
   </table>
   <h3>1.3 规模假设</h3>
   <p>日访问 ≤ 2000，峰值 &lt;10 QPS，用户数 ≤ 100，单据量 ≤ 500/天。所有容量设计基于单机 2C4G。</p>
@@ -201,6 +201,8 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
     <tr><td>process</td><td>配送单（发料）、报工单、完工审核</td></tr>
     <tr><td>piece</td><td>工价表、计件记录、工资汇总</td></tr>
     <tr><td>bill</td><td>账单、收款登记</td></tr>
+    <tr><td>payable</td><td>供应商付款、核销、应付报表</td></tr>
+    <tr><td>report</td><td>销售报表、毛利报表（只读，跨模块走各模块 service 查询）</td></tr>
     <tr><td>alert</td><td>预警产生与处理</td></tr>
     <tr><td>print</td><td>打印模板管理</td></tr>
     <tr><td>infra</td><td>审计日志、幂等记录、登录日志</td></tr>
@@ -246,6 +248,8 @@ CREATE TABLE suppliers (                   -- 供应商档案（MVP 补缺）
   id BIGSERIAL PRIMARY KEY, code VARCHAR(30) NOT NULL UNIQUE,
   name VARCHAR(100) NOT NULL, contact VARCHAR(50), phone VARCHAR(20),
   address VARCHAR(200), remark VARCHAR(500),
+  credit_days SMALLINT NOT NULL DEFAULT 30,
+  opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0,   -- 期初应付欠款
   status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
 );
 CREATE TABLE material_categories (          -- 分类树（学 jshERP）
@@ -265,6 +269,7 @@ CREATE TABLE materials (
   piece_enabled BOOLEAN NOT NULL DEFAULT FALSE,     -- 启用计件
   output_material_id BIGINT,                -- 加工产出映射（半成品→成品）
   last_purchase_price NUMERIC(14,4),        -- 采购参考价
+  avg_cost NUMERIC(14,4) NOT NULL DEFAULT 0,-- 移动加权平均成本（采购入库时更新；期初导入可录）
   image_url VARCHAR(300), ext_props JSONB, remark VARCHAR(500),
   status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
 );
@@ -295,6 +300,7 @@ CREATE TABLE customers (
   price_mode VARCHAR(10) NOT NULL,         -- discount | min_unit
   discount NUMERIC(5,4),                   -- 如 0.9500（95折）
   credit_days SMALLINT NOT NULL DEFAULT 30,
+  opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0,  -- 期初欠款（并入首期账单）
   status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
 );</code></pre>
 
@@ -353,10 +359,27 @@ CREATE TABLE sales_order_items (
   price_base NUMERIC(14,4),                   -- 参考件价（元/件，仅展示，避免混淆）
   discount NUMERIC(5,4),
   amount NUMERIC(14,2) NOT NULL,              -- 总价：round(price*qty,2) 再折（=该行金额）
+  cost_unit NUMERIC(14,4),                    -- 出库时成本快照（元/基础单位，=当时 avg_cost）
+  cost_amount NUMERIC(14,2) NOT NULL DEFAULT 0, -- 总成本快照 = cost_unit×base_qty（毛利用）
   price_source VARCHAR(15) NOT NULL           -- exclusive|level|fallback|manual(改价)
 );
 -- 退货 = 红字反向单：sales_returns / purchase_returns 结构同 items，
--- 引用原单行 original_item_id，单价取原行快照，产生反向库存流水。</code></pre>
+-- 引用原单行 original_item_id，单价取原行快照，产生反向库存流水。
+-- 采购单 purchase_orders 同构（supplier_id 替代 customer_id，增加
+--   paid_amount NUMERIC(14,2) DEFAULT 0 / pay_status: unpaid|partial|paid）
+CREATE TABLE payment_records (             -- 供应商付款（应付款核销）
+  id BIGSERIAL PRIMARY KEY, no VARCHAR(40) NOT NULL UNIQUE,
+  supplier_id BIGINT NOT NULL, amount NUMERIC(14,2) NOT NULL,
+  method VARCHAR(10) NOT NULL, paid_at DATE NOT NULL,
+  operator_id BIGINT NOT NULL, remark VARCHAR(500),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE payment_refs (                -- 付款 ↔ 采购单 核销关系（可一付多单）
+  payment_id BIGINT NOT NULL, purchase_order_id BIGINT NOT NULL,
+  amount NUMERIC(14,2) NOT NULL, PRIMARY KEY(payment_id, purchase_order_id)
+);
+-- 应付余额 = 期初 + 采购确认额 − 付款核销额 − 采购退货冲抵（SQL 聚合实时算）
+CREATE INDEX idx_po_supplier ON purchase_orders(supplier_id, pay_status);</code></pre>
 
   <h3>4.6 加工与计件</h3>
 <pre><code>CREATE TABLE delivery_notes (              -- 配送单（发料管理）
@@ -422,6 +445,7 @@ CREATE TABLE piece_material_scope (
   creator_id BIGINT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TABLE bill_items (bill_id BIGINT, sales_order_id BIGINT, amount NUMERIC(14,2), PRIMARY KEY(bill_id, sales_order_id));
+-- 首期账单自动并入 customers.opening_balance（单列一行，标记 source=opening）
 CREATE TABLE receipts (id BIGSERIAL PRIMARY KEY, bill_id BIGINT NOT NULL,
   amount NUMERIC(14,2) NOT NULL, method VARCHAR(10) NOT NULL, received_at DATE NOT NULL, operator_id BIGINT NOT NULL);
 CREATE TABLE alert_records (
@@ -468,10 +492,10 @@ CREATE TABLE idempotency_records (
     <tr><td>super_admin</td><td>全部 + <code>system:role:view</code></td><td>全部</td></tr>
     <tr><td>sys_admin</td><td><code>system:user:*</code> <code>system:log:view</code> <code>print:template:*</code></td><td>全部</td></tr>
     <tr><td>warehouse</td><td><code>stock:query:*</code> <code>stock:report:view</code> <code>stock:transfer:*</code> <code>stock:adjust:*</code> <code>stock:opening:*</code> <code>picking:execute</code></td><td>全部仓库</td></tr>
-    <tr><td>purchase</td><td><code>purchase:in:*</code> <code>purchase:return:*</code> <code>base:supplier:*</code> <code>stock:query</code></td><td>本人创建的单据</td></tr>
+    <tr><td>purchase</td><td><code>purchase:in:*</code> <code>purchase:return:*</code> <code>payment:create</code> <code>base:supplier:*</code> <code>stock:query</code> <code>report:payable:view</code></td><td>本人创建的单据；付款登记限本人</td></tr>
     <tr><td>sales</td><td><code>base:customer:*</code> <code>sales:order:*</code> <code>sales:order:editPrice</code> <code>sales:return:create</code> <code>picking:print</code> <code>print:note:print</code> <code>stock:query</code></td><td>本人创建的单据</td></tr>
     <tr><td>auditor</td><td><code>process:task:view</code> <code>process:audit:confirm</code> <code>process:audit:reject</code> <code>piece:report:view</code> <code>piece:query:*</code></td><td>全部加工单</td></tr>
-    <tr><td>finance</td><td><code>bill:*</code> <code>receipt:*</code> <code>alert:handle</code> <code>piece:summary:view</code> <code>piece:report:view</code> <code>piece:void</code> <code>stock:report:view</code></td><td>全部</td></tr>
+    <tr><td>finance</td><td><code>bill:*</code> <code>receipt:*</code> <code>alert:handle</code> <code>piece:summary:view</code> <code>piece:report:view</code> <code>piece:void</code> <code>stock:report:view</code> <code>report:sales:view</code> <code>report:payable:view</code> <code>payment:create</code></td><td>全部</td></tr>
     <tr><td>worker</td><td><code>process:my:list</code> <code>piece:my:report</code> <code>piece:my:withdraw</code> <code>piece:my:query</code></td><td><b>仅本人</b>（service 层强制注入 employee_id 过滤；计件可选产品由 piece_material_scope 白名单控制，响应中仅含"我的工价"）</td></tr>
   </table>
   <div class="callout c-warn"><b>教训（来自 jshERP 源码评审）：</b>jshERP 后端接口只有登录校验无按钮级 RBAC（任意登录用户可调 resetPwd）、MD5 弱哈希、默认密码不强制改、多角色只取第一个。本设计逐一规避：后端强制权限 Guard、bcrypt、must_change_password、多角色取并集。</div>
@@ -530,7 +554,14 @@ CREATE TABLE idempotency_records (
     <tr><td>GET</td><td>/stock/ledger</td><td>stock:query</td><td>库存流水（业务类型/单号/时间筛选，显示结余）</td></tr>
     <tr><td>POST</td><td>/stock/opening</td><td>stock:opening:create</td><td>期初库存导入（仅系统启用初期开放）</td></tr>
     <tr><td>GET</td><td>/notifications?unread=1</td><td>登录即可</td><td>通知列表/未读数（30s 轮询角标）</td></tr>
-    <tr><td>POST</td><td>/bills/generate</td><td>bill:create</td><td>按期生成账单（幂等）</td></tr>
+    <tr><td>POST</td><td>/sales/returns</td><td>sales:return:create</td><td>销售退货（红字反向单，引用原单行，反向流水+成本冲回）</td></tr>
+    <tr><td>POST</td><td>/purchase/orders</td><td>purchase:in:create</td><td>采购入库（同时更新移动加权平均成本 avg_cost）</td></tr>
+    <tr><td>POST</td><td>/purchase/returns</td><td>purchase:return:create</td><td>采购退货（红字，冲应付）</td></tr>
+    <tr><td>POST</td><td>/payments</td><td>payment:create</td><td>供应商付款登记（一付多单核销）</td></tr>
+    <tr><td>GET</td><td>/report/sales?groupBy=customer|month|material</td><td>report:sales:view</td><td>销售报表（销售额/退货净额/毛利）+ /export</td></tr>
+    <tr><td>GET</td><td>/report/gross-margin?month=</td><td>report:sales:view</td><td>毛利报表：销售额 − 出库成本 − 计件工钱（按月/按客户）</td></tr>
+    <tr><td>GET</td><td>/report/payable?supplierId=</td><td>report:payable:view</td><td>应付报表（期初+采购−付款−退货，SQL 实时聚合）</td></tr>
+    <tr><td>POST</td><td>/bills/generate</td><td>bill:create</td><td>按期生成账单（幂等；首期并入客户期初欠款）</td></tr>
   </table>
 </section>
 
@@ -567,11 +598,12 @@ CREATE TABLE idempotency_records (
     <tr><td>工作台</td><td>看板</td><td>四卡片：待审核报工、待发货订单、库存预警、账期预警；各卡片点击穿透列表（自动带筛选）</td></tr>
     <tr><td>基础数据</td><td>产品分类 / 物料 / 仓库 / 客户 / 供应商 / 员工 / 工价 / 价格规则</td><td>乐观锁冲突提示刷新；停用不删除；产品详情抽屉含各仓分布+近期流水+各等级价；计件可见范围编辑（选员工/选标签）；期初库存入口（仅启用初期）</td></tr>
     <tr><td>库存</td><td>库存总览（三视图）/ 流水 / 调拨</td><td>统一查询规范；流水按仓库+物料+业务类型+时间筛选，显示结余列与期初期末</td></tr>
-    <tr><td>采购</td><td>采购入库 / 采购退货</td><td>关联供应商；入库即产生流水</td></tr>
+    <tr><td>采购</td><td>采购入库 / 采购退货 / 付款登记 / 应付报表</td><td>关联供应商；入库即产生流水并更新均价；付款一付多单核销；应付余额实时聚合</td></tr>
     <tr><td>销售</td><td>销售订单 / 拣货 / 销售退货</td><td>明细行选择包装（件/袋/箱）自动换算；<b>列头强制区分：数量(含包装名，如"5袋")/单价(元/袋)/总价(元)，参考件价灰字辅助</b>；合计行 SQL 聚合；价格自动带出（等级计价，draft 可改价需权限+审计，confirm 锁定）；拣货页打印拣货单→确认出库</td></tr>
     <tr><td>加工</td><td>配送单（发料管理）</td><td>发料出库→员工仓在制；打印配送单</td></tr>
     <tr><td>计件</td><td>报工审核 / 记录查询 / 统计报表</td><td>审核页显示照片、行级改数量（原因必填）；报表四视图（明细/按员工/按物料/员工×月矩阵），SQL 聚合+导出</td></tr>
-    <tr><td>账单</td><td>账单 / 收款 / 预警中心 / 通知中心</td><td>账单明细穿透销售订单；通知列表点击穿透单据</td></tr>
+    <tr><td>报表</td><td>销售报表 / 毛利报表</td><td>销售（按客户/月/物料：销售额、退货净额）；毛利（销售额−出库成本−计件工钱，按月/按客户）；统一查询规范+导出</td></tr>
+    <tr><td>账单</td><td>账单 / 收款 / 预警中心 / 通知中心</td><td>账单明细穿透销售订单；首期账单并入客户期初欠款；通知列表点击穿透单据</td></tr>
     <tr><td>系统</td><td>用户 / 角色总览 / 操作日志 / 打印模板</td><td>角色矩阵只读；重置密码二次确认</td></tr>
   </table>
 
@@ -737,14 +769,14 @@ CREATE TABLE idempotency_records (
   <table>
     <tr><th>里程碑</th><th>交付</th><th>验收标准</th></tr>
     <tr><td>M1 基础+库存</td><td>认证/账号/RBAC、基础数据、库存+流水+调拨、审计日志</td><td>权限矩阵全接口生效；并发扣减无负库存；traceId 贯穿</td></tr>
-    <tr><td>M2 进销存+打印</td><td>采购/销售/退货、计价引擎、拣货单+二联单打印</td><td>金额对账零误差（SQL 聚合 vs 单据合计）；打印模板可维护</td></tr>
+    <tr><td>M2 进销存+打印</td><td>采购/销售/退货、计价引擎（含包装换算）、拣货单+二联单打印、<b>移动加权成本 + 出库成本快照</b></td><td>金额对账零误差（SQL 聚合 vs 单据合计）；打印模板可维护；均价更新并发正确</td></tr>
     <tr><td>M3 加工+计件+移动端</td><td>配送单（发料）、报工单（员工自主多行）、审核（行级改数量）、计件工资、移动端（报工/工钱/审核/通知）</td><td>审核事务原子性验证（库存联动+计件入账+通知）；弱网断点提交不丢数据；计件产品白名单不泄露价格</td></tr>
-    <tr><td>M4 账单+预警</td><td>月度账单、收款、账期/发货预警、备份恢复演练</td><td>预警 cron 幂等不重发；恢复演练通过</td></tr>
+    <tr><td>M4 账单+预警+报表</td><td>月度账单（含客户期初欠款并入）、收款、供应商付款/应付报表、销售报表、毛利报表、账期/发货预警、备份恢复演练</td><td>预警 cron 幂等不重发；毛利=销售−成本−工钱可对账追溯；应付余额=期初+采购−付款−退货勾稽相等；恢复演练通过</td></tr>
   </table>
-  <div class="callout c-ok" style="margin-top:16px"><b>v1.2 评审更新摘要（八轮意见全部并入）：</b>① 报工单模型重做：员工自主多行报工、审核行级改数量（原因必填）、approved 锁定、作废红冲、提交前可撤回 ② 计件产品白名单可见（指定账号/员工标签，防价格泄露）③ 产品/仓库通用字段铺开（对照 jshERP：分类树/型号/规格/品牌/条码等，选填留空，必填仅 5 项）④ 统一三时间规范（biz_date/created_at/环节时间）⑤ 供应商档案 + 期初库存补缺 ⑥ 应用内通知（不做弹窗推送，预留公众号 emitter）⑦ 员工端极简化 + 统一查询规范 + 计件/库存报表 ⑧ <b>包装单元体系</b>（material_packages：件/袋/箱，整包价=件价×换算或下单人改价；订单行区分 单价(元/包装)/总价，库存按 base_qty 联动）+ <b>密码策略简化</b>（初始 6 位数字；自设 ≥8 位不限组成）。<b>待最终确认点：</b>角色矩阵（5.2）、状态机（6）、精度规则（8）、针式打印机到位、里程碑顺序。确认后启动 M1。</div>
+  <div class="callout c-ok" style="margin-top:16px"><b>v1.3 评审更新摘要（九轮意见全部并入，功能覆盖自审后冻结）：</b>v1.2 全部内容（报工单模型/白名单/通用字段/三时间/通知/极简员工端/包装体系/密码策略）+ 本轮补齐 ERP 四缺口：<b>① 成本毛利</b>（materials.avg_cost 移动加权、订单行成本快照、毛利报表=销售−出库成本−计件工钱）<b>② 销售报表</b>（按客户/月/物料，含退货净额）<b>③ 客户期初欠款</b>（customers.opening_balance 并入首期账单）<b>④ 供应商应付款</b>（purchase_orders.pay_status、payment_records/refs 一付多单核销、应付报表）+ 补齐退货/付款/报表 API 与权限码。<b>设计已冻结，确认 5 项（角色矩阵/状态机/精度规则/针式打印机/里程碑顺序）后启动 M1。</b></div>
 </section>
 
-<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.2 · 2026-10-15 · 评审更新完毕</p>
+<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.3 · 2026-10-15 · 设计冻结</p>
 </main>
 </div>
 </body>
