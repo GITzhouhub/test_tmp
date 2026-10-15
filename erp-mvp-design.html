@@ -143,7 +143,7 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
 <section id="s0">
   <h1 style="font-size:24px;margin-bottom:6px">仓储进销存 ERP — MVP 详细设计文档</h1>
   <div class="meta">
-    <span>版本 <b>v1.0（待评审）</b></span><span>日期 <b>2026-10-15</b></span>
+    <span>版本 <b>v1.1（评审更新：含七轮评审意见）</b></span><span>日期 <b>2026-10-15</b></span>
     <span>形态 <b>单体 NestJS + PG / Vue3 双端</b></span><span>多租户 <b>本期不含，代码预留</b></span>
   </div>
   <p>本文档整合此前所有设计结论，作为 MVP 开发的唯一依据。评审通过后按第 14 节里程碑推进。参考对象：jshERP（单据-流水绑定、进销存口径）、ERPNext（文档生命周期、价格表、Stock Ledger 结余）。</p>
@@ -198,7 +198,7 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
     <tr><td>stock</td><td>库存、流水、调拨；对外仅暴露 <code>moveStock()</code></td></tr>
     <tr><td>purchase</td><td>采购入库、采购退货</td></tr>
     <tr><td>sales</td><td>销售订单、拣货、销售退货、二联单</td></tr>
-    <tr><td>process</td><td>加工任务、配送单、完工审核</td></tr>
+    <tr><td>process</td><td>配送单（发料）、报工单、完工审核</td></tr>
     <tr><td>piece</td><td>工价表、计件记录、工资汇总</td></tr>
     <tr><td>bill</td><td>账单、收款登记</td></tr>
     <tr><td>alert</td><td>预警产生与处理</td></tr>
@@ -238,22 +238,44 @@ CREATE TABLE user_roles (          -- 角色定义写死在代码常量，仅分
 <pre><code>CREATE TABLE employees (
   id BIGSERIAL PRIMARY KEY, name VARCHAR(50) NOT NULL,
   worker_type VARCHAR(10) NOT NULL,        -- local | remote（决定计件工价）
+  tags TEXT[] NOT NULL DEFAULT '{}',       -- 标签（计件产品可见范围用），如 {'外发组'}
   address VARCHAR(200), phone VARCHAR(20),
   status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
+);
+CREATE TABLE suppliers (                   -- 供应商档案（MVP 补缺）
+  id BIGSERIAL PRIMARY KEY, code VARCHAR(30) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL, contact VARCHAR(50), phone VARCHAR(20),
+  address VARCHAR(200), remark VARCHAR(500),
+  status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
+);
+CREATE TABLE material_categories (          -- 分类树（学 jshERP）
+  id BIGSERIAL PRIMARY KEY, parent_id BIGINT, name VARCHAR(50) NOT NULL, sort INT DEFAULT 0
 );
 CREATE TABLE materials (
   id BIGSERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(100) NOT NULL,
-  type VARCHAR(10) NOT NULL,               -- raw | semi | finished
-  unit VARCHAR(10) NOT NULL,               -- 基本单位（件）
-  min_unit_qty NUMERIC(14,3),              -- 最小销售单元含基单位数量，如 12 = 1打
+  category_id BIGINT,                       -- 必填：分类
+  type VARCHAR(10) NOT NULL,                -- 必填：raw | semi | finished
+  unit VARCHAR(10) NOT NULL,                -- 必填：基本单位（件）
+  -- ---- 以下全部选填，实际录入可留空 ----
+  model VARCHAR(50), spec VARCHAR(100),     -- 型号 / 规格（3寸/孔距96）
+  brand VARCHAR(50), color VARCHAR(30), mfrs VARCHAR(50),
+  weight NUMERIC(10,3), barcode VARCHAR(50),-- 重量kg / 条码（拣货扫码）
+  min_unit_qty NUMERIC(14,3),               -- 最小销售单元数量（12=1打）
+  piece_enabled BOOLEAN NOT NULL DEFAULT FALSE,     -- 启用计件
+  output_material_id BIGINT,                -- 加工产出映射（半成品→成品）
+  last_purchase_price NUMERIC(14,4),        -- 采购参考价
+  image_url VARCHAR(300), ext_props JSONB, remark VARCHAR(500),
   status SMALLINT NOT NULL DEFAULT 1, version INT NOT NULL DEFAULT 1
 );
+-- 必填仅5项：编码/名称/分类/类型/单位；录入页"必填在上、选填折叠"
 CREATE TABLE warehouses (
   id BIGSERIAL PRIMARY KEY, code VARCHAR(30) NOT NULL UNIQUE,
   name VARCHAR(50) NOT NULL,
   type VARCHAR(15) NOT NULL,               -- real | employee_virtual
   employee_id BIGINT UNIQUE,               -- 虚拟仓必填且一对一
+  -- 选填：keeper(负责人) address remark
+  keeper VARCHAR(50), address VARCHAR(200), remark VARCHAR(500),
   status SMALLINT NOT NULL DEFAULT 1
 );
 CREATE TABLE customers (
@@ -306,6 +328,7 @@ CREATE INDEX idx_ledger_wm ON stock_ledger(warehouse_id, material_id, created_at
   id BIGSERIAL PRIMARY KEY, no VARCHAR(40) NOT NULL UNIQUE,  -- SO20261015001
   customer_id BIGINT NOT NULL, status VARCHAR(15) NOT NULL DEFAULT 'draft',
   total_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+  biz_date DATE NOT NULL DEFAULT current_date,  -- 业务时间（可改限7天内）
   promise_ship_date DATE, remark VARCHAR(500),
   creator_id BIGINT NOT NULL, version INT NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -321,32 +344,58 @@ CREATE TABLE sales_order_items (
 -- 引用原单行 original_item_id，单价取原行快照，产生反向库存流水。</code></pre>
 
   <h3>4.6 加工与计件</h3>
-<pre><code>CREATE TABLE process_tasks (
-  id BIGSERIAL PRIMARY KEY, no VARCHAR(40) NOT NULL UNIQUE,
-  material_id BIGINT NOT NULL,               -- 半成品
-  qty NUMERIC(14,3) NOT NULL,                -- 发料数量
-  employee_id BIGINT NOT NULL,
-  status VARCHAR(15) NOT NULL DEFAULT 'pending_dispatch',
-       -- pending_dispatch→dispatched→submitted→approved / rejected
-  finished_qty NUMERIC(14,3),
-  reject_reason VARCHAR(200),
-  creator_id BIGINT NOT NULL, version INT NOT NULL DEFAULT 1,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+<pre><code>CREATE TABLE delivery_notes (              -- 配送单（发料管理）
+  id BIGSERIAL PRIMARY KEY, no VARCHAR(40) NOT NULL UNIQUE,  -- DN20261015001
+  employee_id BIGINT NOT NULL,             -- 收料员工（含地址打印）
+  biz_date DATE NOT NULL DEFAULT current_date,
+  status VARCHAR(12) NOT NULL,             -- created | issued | received
+  remark VARCHAR(500),
+  creator_id BIGINT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE delivery_note_items (
+  id BIGSERIAL PRIMARY KEY, note_id BIGINT NOT NULL,
+  material_id BIGINT NOT NULL, qty NUMERIC(14,3) NOT NULL CHECK (qty > 0)
+);
+-- 发料确认 = 半成品仓/原料仓 -N → 员工虚拟仓 +N（在制参考量）
 CREATE TABLE piece_rates (
   id BIGSERIAL PRIMARY KEY,
   material_id BIGINT NOT NULL, worker_type VARCHAR(10) NOT NULL,
   unit_price NUMERIC(14,4) NOT NULL,
   effective_from DATE NOT NULL, effective_to DATE
 );
-CREATE TABLE piece_works (
-  id BIGSERIAL PRIMARY KEY, task_id BIGINT NOT NULL UNIQUE,
-  employee_id BIGINT NOT NULL, qty NUMERIC(14,3) NOT NULL,
-  unit_price NUMERIC(14,4) NOT NULL,          -- 审核时点生效工价快照
-  amount NUMERIC(14,2) NOT NULL,              -- round(qty*unit_price,2)
-  status VARCHAR(10) NOT NULL,                -- active(有效) | voided(任务被红冲)
-  auditor_id BIGINT NOT NULL, audited_at TIMESTAMPTZ NOT NULL
-);</code></pre>
+-- 员工自主报工单（多行明细，明细行即计件账，取消独立 piece_works 表）
+CREATE TABLE work_reports (
+  id BIGSERIAL PRIMARY KEY, no VARCHAR(40) NOT NULL UNIQUE,   -- WR20261015001
+  employee_id BIGINT NOT NULL,
+  biz_date DATE NOT NULL DEFAULT current_date,   -- 业务时间（补报昨天）
+  status VARCHAR(12) NOT NULL,        -- submitted|approved|rejected|voided
+  total_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+  remark VARCHAR(500), photos JSONB,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  auditor_id BIGINT, audited_at TIMESTAMPTZ, reject_reason VARCHAR(200),
+  void_reason VARCHAR(200), voided_by BIGINT, voided_at TIMESTAMPTZ
+);
+CREATE TABLE work_report_items (
+  id BIGSERIAL PRIMARY KEY, report_id BIGINT NOT NULL,
+  material_id BIGINT NOT NULL,
+  qty NUMERIC(14,3) NOT NULL CHECK (qty > 0),          -- 提交数
+  confirmed_qty NUMERIC(14,3),                         -- 审核确认数(默认=qty, ≤qty)
+  unit_price NUMERIC(14,4) NOT NULL,                   -- 提交时点"我的工价"快照
+  amount NUMERIC(14,2) NOT NULL,                       -- round(confirmed_qty×price,2)
+  adjust_reason VARCHAR(200),                          -- 改数量时必填
+  status VARCHAR(10) NOT NULL DEFAULT 'active'         -- active|voided
+);
+CREATE INDEX idx_wri_employee ON work_report_items(report_id);
+-- 计件产品可见性（白名单：不指定=无人可见，防价格泄露）
+CREATE TABLE piece_material_scope (
+  id BIGSERIAL PRIMARY KEY,
+  material_id BIGINT NOT NULL,
+  scope_type VARCHAR(10) NOT NULL,     -- employee(指定账号) | tag(按员工标签)
+  scope_value VARCHAR(50) NOT NULL,    -- 员工ID 或 标签名
+  UNIQUE (material_id, scope_type, scope_value)
+);
+-- 加工产出映射：半成品→成品；未配置则纯计件不动库存
+-- materials.output_material_id BIGINT（见 4.2）</code></pre>
 
   <h3>4.7 账单 / 预警 / 支撑</h3>
 <pre><code>CREATE TABLE bills (
@@ -366,6 +415,16 @@ CREATE TABLE alert_records (
   title VARCHAR(200) NOT NULL, handled BOOLEAN NOT NULL DEFAULT FALSE,
   handled_by BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE notifications (              -- 应用内通知（不做APP弹窗/推送）
+  id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL,
+  type VARCHAR(20) NOT NULL,   -- audit_result | report_rejected | bill_due | ship_delay | account
+  title VARCHAR(200) NOT NULL, content VARCHAR(500),
+  ref_type VARCHAR(20), ref_id BIGINT,          -- 点击穿透到单据
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- 触达渠道抽象为可插拔 emitter：MVP 仅实现"应用内"；后期加微信公众号 emitter 即插即用
+-- H5 登录后 30s 轮询未读数（角标）；小程序可复用 /m 端 H5 嵌套
 CREATE TABLE print_templates (
   id BIGSERIAL PRIMARY KEY, code VARCHAR(30) NOT NULL UNIQUE,  -- pick_list/duplicate_note/delivery_note
   name VARCHAR(50) NOT NULL, hiprint_json JSONB NOT NULL, version INT NOT NULL DEFAULT 1
@@ -393,12 +452,12 @@ CREATE TABLE idempotency_records (
     <tr><th>角色</th><th>权限范围（权限码）</th><th>数据范围</th></tr>
     <tr><td>super_admin</td><td>全部 + <code>system:role:view</code></td><td>全部</td></tr>
     <tr><td>sys_admin</td><td><code>system:user:*</code> <code>system:log:view</code> <code>print:template:*</code></td><td>全部</td></tr>
-    <tr><td>warehouse</td><td><code>stock:query:*</code> <code>stock:transfer:*</code> <code>stock:adjust:*</code> <code>picking:execute</code></td><td>全部仓库</td></tr>
-    <tr><td>purchase</td><td><code>purchase:in:*</code> <code>purchase:return:*</code></td><td>本人创建的单据</td></tr>
-    <tr><td>sales</td><td><code>base:customer:*</code> <code>sales:order:*</code> <code>sales:return:create</code> <code>picking:print</code> <code>print:note:print</code></td><td>本人创建的单据</td></tr>
-    <tr><td>auditor</td><td><code>process:task:view</code> <code>process:audit:confirm</code> <code>process:audit:reject</code> <code>piece:query:*</code></td><td>全部加工单</td></tr>
-    <tr><td>finance</td><td><code>bill:*</code> <code>receipt:*</code> <code>alert:handle</code> <code>piece:summary:view</code></td><td>全部</td></tr>
-    <tr><td>worker</td><td><code>process:my:list</code> <code>process:my:submit</code> <code>piece:my:query</code></td><td><b>仅本人</b>（service 层强制注入 employee_id 过滤）</td></tr>
+    <tr><td>warehouse</td><td><code>stock:query:*</code> <code>stock:report:view</code> <code>stock:transfer:*</code> <code>stock:adjust:*</code> <code>stock:opening:*</code> <code>picking:execute</code></td><td>全部仓库</td></tr>
+    <tr><td>purchase</td><td><code>purchase:in:*</code> <code>purchase:return:*</code> <code>base:supplier:*</code> <code>stock:query</code></td><td>本人创建的单据</td></tr>
+    <tr><td>sales</td><td><code>base:customer:*</code> <code>sales:order:*</code> <code>sales:order:editPrice</code> <code>sales:return:create</code> <code>picking:print</code> <code>print:note:print</code> <code>stock:query</code></td><td>本人创建的单据</td></tr>
+    <tr><td>auditor</td><td><code>process:task:view</code> <code>process:audit:confirm</code> <code>process:audit:reject</code> <code>piece:report:view</code> <code>piece:query:*</code></td><td>全部加工单</td></tr>
+    <tr><td>finance</td><td><code>bill:*</code> <code>receipt:*</code> <code>alert:handle</code> <code>piece:summary:view</code> <code>piece:report:view</code> <code>piece:void</code> <code>stock:report:view</code></td><td>全部</td></tr>
+    <tr><td>worker</td><td><code>process:my:list</code> <code>piece:my:report</code> <code>piece:my:withdraw</code> <code>piece:my:query</code></td><td><b>仅本人</b>（service 层强制注入 employee_id 过滤；计件可选产品由 piece_material_scope 白名单控制，响应中仅含"我的工价"）</td></tr>
   </table>
   <div class="callout c-warn"><b>教训（来自 jshERP 源码评审）：</b>jshERP 后端接口只有登录校验无按钮级 RBAC（任意登录用户可调 resetPwd）、MD5 弱哈希、默认密码不强制改、多角色只取第一个。本设计逐一规避：后端强制权限 Guard、bcrypt、must_change_password、多角色取并集。</div>
 </section>
@@ -408,10 +467,11 @@ CREATE TABLE idempotency_records (
   <table>
     <tr><th style="width:110px">单据</th><th>状态流转</th><th>关键约束</th></tr>
     <tr><td>销售订单</td><td><span class="tag t-gray">draft</span>→<span class="tag t-blue">confirmed</span>→<span class="tag t-orange">picking</span>→<span class="tag t-green">shipped</span>→<span class="tag t-green">settled/closed</span></td><td>作废仅 draft；出库后修改只能走销售退货红冲；confirmed 时锁价格快照</td></tr>
-    <tr><td>加工任务</td><td><span class="tag t-gray">pending_dispatch</span>→<span class="tag t-blue">dispatched</span>→<span class="tag t-orange">submitted</span>→<span class="tag t-green">approved</span> / <span class="tag t-red">rejected</span></td><td>rejected 后员工可重新提交（回 submitted），员工仓在制数量不变；approved = 单事务（员工仓−N → 成品仓+N → 流水 → piece_work → 审计）</td></tr>
+    <tr><td>报工单</td><td><span class="tag t-orange">submitted</span>→<span class="tag t-green">approved</span> / <span class="tag t-red">rejected</span>；approved 后可 <span class="tag t-red">voided</span></td><td>审核可改行数量（≤提交数，差异原因必填），单价不可改（提交时点"我的工价"快照）；approved 即锁定；作废=红冲单事务（成品仓−N→员工仓+N→明细行 voided→任务回 submitted），工钱实时聚合自愈；员工提交后审核前可自行撤回重新编辑</td></tr>
     <tr><td>账单</td><td><span class="tag t-blue">confirmed</span>→<span class="tag t-orange">partial_paid</span>→<span class="tag t-green">settled</span></td><td>overdue 由预警 cron 计算，不落库状态；收款累计不可超额</td></tr>
-    <tr><td>所有单据</td><td>—</td><td><b>不可物理删除</b>，只可作废/红冲；作废权限独立控制并写审计</td></tr>
+    <tr><td>所有单据</td><td>—</td><td><b>不可物理删除</b>，只可作废/红冲；作废权限独立控制并写审计；统一三时间：<code>biz_date</code>（业务时间，可改限7天内）/<code>created_at</code>（录入时间，不可改）/环节时间（submitted_at 等，自动记）</td></tr>
   </table>
+  <div class="callout c-info"><b>计件数据流：</b>配送单管发料（员工仓在制参考量），报工单管计件（员工自主多行明细，明细行即计件账）；库存联动由 materials.output_material_id 决定：配置则员工仓−半成品/成品仓+成品两笔流水，未配置纯计件不动库存。</div>
 </section>
 
 <section id="s7">
@@ -444,9 +504,17 @@ CREATE TABLE idempotency_records (
     <tr><td>POST</td><td>/sales/orders</td><td>sales:order:create</td><td>计价引擎自动填充价格快照</td></tr>
     <tr><td>POST</td><td>/sales/orders/:id/confirm</td><td>sales:order:confirm</td><td>锁定快照</td></tr>
     <tr><td>POST</td><td>/picking/:orderId/execute</td><td>picking:execute</td><td>事务：出库+流水+更新状态</td></tr>
-    <tr><td>POST</td><td>/process/tasks/:id/submit</td><td>process:my:submit</td><td>员工移动端提交完工（数量+照片）</td></tr>
-    <tr><td>POST</td><td>/process/tasks/:id/approve</td><td>process:audit:confirm</td><td>单事务四联动（见 6 节）</td></tr>
+    <tr><td>GET</td><td>/piece/my/materials</td><td>piece:my:report</td><td>我可报工的产品列表（白名单过滤，仅含我的工价）</td></tr>
+    <tr><td>POST</td><td>/piece/reports</td><td>piece:my:report</td><td>提交报工单（多行明细，数量+照片，幂等）</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/withdraw</td><td>piece:my:withdraw</td><td>审核前自行撤回重新编辑</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/approve</td><td>process:audit:confirm</td><td>整单审核，行级可改数量（原因必填），单事务库存联动</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/void</td><td>piece:void</td><td>作废红冲（原因必填，单事务回滚库存+工钱）</td></tr>
     <tr><td>GET</td><td>/piece/my/summary?month=2026-10</td><td>piece:my:query</td><td>本人当月工钱与明细</td></tr>
+    <tr><td>GET</td><td>/piece/report?groupBy=employee|material|month</td><td>piece:report:view</td><td>计件统计报表（员工/物料/月趋势/员工×月矩阵）+ /export 导出</td></tr>
+    <tr><td>GET</td><td>/stock?groupBy=warehouse|material</td><td>stock:query</td><td>库存总览三视图（明细/按仓库/按物料）+ /export</td></tr>
+    <tr><td>GET</td><td>/stock/ledger</td><td>stock:query</td><td>库存流水（业务类型/单号/时间筛选，显示结余）</td></tr>
+    <tr><td>POST</td><td>/stock/opening</td><td>stock:opening:create</td><td>期初库存导入（仅系统启用初期开放）</td></tr>
+    <tr><td>GET</td><td>/notifications?unread=1</td><td>登录即可</td><td>通知列表/未读数（30s 轮询角标）</td></tr>
     <tr><td>POST</td><td>/bills/generate</td><td>bill:create</td><td>按期生成账单（幂等）</td></tr>
   </table>
 </section>
@@ -470,23 +538,24 @@ CREATE TABLE idempotency_records (
   <h3>9.1 设计规范</h3>
   <ul>
     <li>主色 <code>#165DFF</code>（arcoblue-6）；圆角 2-4px；字体 PingFang SC / Inter；页面底色 <code>#F2F3F5</code>，卡片白底 1px 边框</li>
-    <li>布局：左侧菜单（220px，按权限渲染）+ 顶栏（面包屑/用户）+ 内容区（max-width 自适应）</li>
+    <li>布局：左侧菜单（220px，按权限渲染）+ 顶栏（面包屑/用户/通知铃铛角标）+ 内容区（max-width 自适应）</li>
     <li>列表页统一模式：工具栏（筛选+搜索+主操作）→ 表格（状态列用彩色 Tag）→ 右侧分页</li>
-    <li>表单页统一模式：抽屉（简单表单）/ 独立页（单据类，含明细表格行内编辑）</li>
+    <li>表单页统一模式：抽屉（简单表单）/ 独立页（单据类，含明细表格行内编辑）；档案录入"必填在上、选填折叠"</li>
+    <li><b>统一查询规范（所有列表页强制）</b>：常用筛选平铺+高级折叠，筛选偏好存 localStorage；单搜索框模糊覆盖编码/名称/单号；时间快捷项（今天/本周/本月/上月/自定义）；底部<b>全量合计行</b>（SQL 单独 SUM，非前端累加）；列头排序走后端字段白名单；空状态显示当前条件+一键清除；预警卡片点击穿透带筛选；Excel 导出复用筛选（上限 1 万行，SQL 层聚合）</li>
     <li>响应式：≥992 完整体验；768-991 可用（表格横向滚动）；&lt;768 引导至移动端（管理操作仅 PC）</li>
   </ul>
   <h3>9.2 页面清单</h3>
   <table>
     <tr><th>模块</th><th>页面</th><th>关键交互</th></tr>
     <tr><td>认证</td><td>登录 / 改密</td><td>登录失败 5 次锁 15 分钟提示；首次登录强制跳改密</td></tr>
-    <tr><td>工作台</td><td>看板</td><td>四卡片：待审核计件、待发货订单、库存预警、账期预警；各卡片点击穿透列表</td></tr>
-    <tr><td>基础数据</td><td>物料/仓库/客户/员工/工价/价格规则</td><td>乐观锁冲突提示刷新；停用不删除</td></tr>
-    <tr><td>库存</td><td>库存查询 / 流水 / 调拨</td><td>流水按仓库+物料+时间筛选，显示结余列</td></tr>
-    <tr><td>采购</td><td>采购入库 / 采购退货</td><td>入库即产生流水</td></tr>
-    <tr><td>销售</td><td>销售订单 / 拣货 / 销售退货</td><td>订单明细价格自动带出（可改价需权限）；拣货页打印拣货单→确认出库</td></tr>
-    <tr><td>加工</td><td>加工任务 / 配送单 / 完工审核</td><td>审核页显示员工提交照片；驳回必填意见</td></tr>
-    <tr><td>计件</td><td>记录查询 / 月度汇总</td><td>汇总 SQL 聚合，导出 Excel</td></tr>
-    <tr><td>账单</td><td>账单 / 收款 / 预警中心</td><td>账单明细穿透销售订单</td></tr>
+    <tr><td>工作台</td><td>看板</td><td>四卡片：待审核报工、待发货订单、库存预警、账期预警；各卡片点击穿透列表（自动带筛选）</td></tr>
+    <tr><td>基础数据</td><td>产品分类 / 物料 / 仓库 / 客户 / 供应商 / 员工 / 工价 / 价格规则</td><td>乐观锁冲突提示刷新；停用不删除；产品详情抽屉含各仓分布+近期流水+各等级价；计件可见范围编辑（选员工/选标签）；期初库存入口（仅启用初期）</td></tr>
+    <tr><td>库存</td><td>库存总览（三视图）/ 流水 / 调拨</td><td>统一查询规范；流水按仓库+物料+业务类型+时间筛选，显示结余列与期初期末</td></tr>
+    <tr><td>采购</td><td>采购入库 / 采购退货</td><td>关联供应商；入库即产生流水</td></tr>
+    <tr><td>销售</td><td>销售订单 / 拣货 / 销售退货</td><td>订单明细价格自动带出（等级计价，draft 可改价需权限+审计，confirm 锁定）；拣货页打印拣货单→确认出库</td></tr>
+    <tr><td>加工</td><td>配送单（发料管理）</td><td>发料出库→员工仓在制；打印配送单</td></tr>
+    <tr><td>计件</td><td>报工审核 / 记录查询 / 统计报表</td><td>审核页显示照片、行级改数量（原因必填）；报表四视图（明细/按员工/按物料/员工×月矩阵），SQL 聚合+导出</td></tr>
+    <tr><td>账单</td><td>账单 / 收款 / 预警中心 / 通知中心</td><td>账单明细穿透销售订单；通知列表点击穿透单据</td></tr>
     <tr><td>系统</td><td>用户 / 角色总览 / 操作日志 / 打印模板</td><td>角色矩阵只读；重置密码二次确认</td></tr>
   </table>
 
@@ -532,55 +601,54 @@ CREATE TABLE idempotency_records (
   <table>
     <tr><th>页面</th><th>内容</th></tr>
     <tr><td>登录/改密</td><td>同 PC 策略；APP 端 refreshToken 存 SecureStorage</td></tr>
-    <tr><td>任务列表</td><td>状态 Tab（待提交/已提交/已完成/已驳回）；卡片显示物料、数量、截止</td></tr>
-    <tr><td>提交完工</td><td>数量步进器（≤发料量）、拍照（≤3张）、备注；驳回任务红点提示原因</td></tr>
-    <tr><td>我的工钱</td><td>月汇总卡 + 明细列表（任务号/数量/单价/金额）；仅本人数据</td></tr>
-    <tr><td>审核（auditor）</td><td>待审列表 → 详情（含照片放大）→ 通过 / 驳回（意见必填）</td></tr>
+    <tr><td><b>报工首页（worker 默认页）</b></td><td>直接显示我的报工历史（倒序）：日期/产品/数量/金额/状态；右下角浮动"＋"小圆钮打开新报工；状态用人话：等确认(黄)/已确认✓(绿)/没通过(红)</td></tr>
+    <tr><td>新建报工</td><td>选产品（白名单过滤+我的常用排序+产品图）→ 单价绿色只读（我的工价）→ 手机系统键盘输数量 → 多行"+添加产品" → 合计预览 → 拍照(≤3)/备注 → 提交；失败存草稿同幂等键重试</td></tr>
+    <tr><td>我的工钱</td><td>月汇总大数字卡 + 明细列表（报工单号/产品/数量/单价/金额）；仅本人数据；默认字体调大一档</td></tr>
+    <tr><td>审核（auditor）</td><td>待审列表 → 详情（含照片放大）→ 整单通过 / 行级改数量（原因必填）/ 驳回（大白话意见必填）</td></tr>
     <tr><td>单据查看</td><td>拣货单 / 配送单 / 账单 移动端渲染 + PDF</td></tr>
+    <tr><td>通知中心</td><td>角标未读数（登录后 30s 轮询）→ 列表 → 点击穿透单据；<b>不做 APP 弹窗推送</b>，后期可接微信公众号/小程序（emitter 插件式）</td></tr>
+    <tr><td>管理员只读查询</td><td>库存查询简化版（仓库下拉+搜索）；单据操作一律 PC</td></tr>
   </table>
+  <div class="callout c-info"><b>员工端极简原则（针对接受能力弱的用户）：</b>一屏一事、大字大按钮、能选不输（产品按常用排序点选）、钱永远可见（单价+合计绿色大字）、文案去术语（等确认/已确认/没通过）、错误提示人话（"网不好，等会儿再点一次，填的还在"）。H5(/m) 与 APP(Capacitor 套壳) 同代码，差异仅在拍照体验/token 保持/本地草稿可靠性。</div>
 
-  <div class="mock-label">移动端原型 · 提交完工 & 我的工钱（Vant 风格示意）</div>
+  <div class="mock-label">移动端原型 · 报工历史首页（左） & 新建报工（右，Vant 风格示意）</div>
   <div class="phones">
     <div class="phone"><div class="scr">
       <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
-      <div class="p-nav"><span class="arr">‹</span>提交完工<span style="flex:1"></span></div>
+      <div class="p-nav"><span class="arr">‹</span>我的记工<span style="flex:1"></span><span class="tag t-orange" style="font-size:10px">2条新</span></div>
       <div class="p-body">
         <div class="p-card">
-          <div class="p-row"><b>PT20261015003</b><span class="tag t-blue">已发料</span></div>
-          <div class="p-row"><span>物料</span><b>半成品 · 合页 3寸</b></div>
-          <div class="p-row"><span>发料数量</span><b>1,200 件</b></div>
-          <div class="p-row"><span>工价（外地）</span><b>0.0500 元/件</b></div>
+          <div class="p-row"><b>10-15 合页3寸</b><span class="tag t-orange">等确认</span></div>
+          <div class="p-row"><span>12,000 件 × 0.05</span><b>600.00</b></div>
         </div>
         <div class="p-card">
-          <div class="p-row" style="justify-content:center;color:var(--text-3)">完工数量</div>
-          <div class="p-stepper"><i>−</i><span class="num">1,180</span><i>＋</i></div>
-          <div class="p-photo">＋ 拍照上传（0/3）</div>
+          <div class="p-row"><b>10-14 拉手4寸</b><span class="tag t-green">已确认 ✓</span></div>
+          <div class="p-row"><span>35,000 件 × 0.05</span><b>1,750.00</b></div>
         </div>
-        <div class="p-btn">提交完工</div>
+        <div class="p-card">
+          <div class="p-row"><b>10-13 抽轨14寸</b><span class="tag t-red">没通过</span></div>
+          <div class="p-row"><span style="color:var(--text-3)">点我看原因</span><b style="color:var(--text-3)">—</b></div>
+        </div>
       </div>
-      <div class="p-tab"><span class="on"><i class="ic">▤</i>任务</span><span><i class="ic">👤</i>我的</span></div>
+      <div style="position:relative;height:40px"></div>
+      <div class="p-tab"><span class="on"><i class="ic">▤</i>记工</span><span><i class="ic">￥</i>我的钱</span><span><i class="ic">🔔</i>通知<sup style="color:var(--red)">2</sup></span></div>
+      <div style="position:absolute;right:14px;bottom:58px;width:52px;height:52px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 4px 12px rgba(22,93,255,.4)">＋</div>
     </div></div>
     <div class="phone"><div class="scr">
       <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
-      <div class="p-nav"><span class="arr">‹</span>我的工钱</div>
+      <div class="p-nav"><span class="arr">‹</span>新的记工<span style="flex:1"></span></div>
       <div class="p-body">
-        <div class="p-card" style="text-align:center;background:var(--primary);border:none;color:#fff">
-          <div style="font-size:11px;opacity:.85">2026年10月 应得计件</div>
-          <div style="font-size:26px;font-weight:600;font-family:var(--mono);margin:4px 0">2,846.50</div>
-          <div style="font-size:11px;opacity:.85">共 8 个任务 · 59,300 件</div>
-        </div>
         <div class="p-card">
-          <div class="p-row"><b>PT20261012011</b><span class="tag t-green">已确认</span></div>
-          <div class="p-row"><span>合页3寸 × 12,000件</span><b>600.00</b></div>
-          <div class="p-row"><span>10-13 审核 · 李审核</span><span style="color:var(--text-3)">0.0500/件</span></div>
+          <div class="p-row"><span>产品（我常做的）</span><b>合页 3寸 ▾</b></div>
+          <div class="p-row"><span>我的单价</span><b style="color:#00B42A;font-size:16px">0.0500 元/件</b></div>
+          <div class="p-row"><span>数量（件）</span><input style="width:110px;border:1px solid #E5E6EB;border-radius:4px;padding:6px;font-size:16px;text-align:right;font-family:var(--mono)" value="12000"></div>
+          <div class="p-row"><span>小计</span><b style="color:#00B42A">600.00 元</b></div>
         </div>
-        <div class="p-card">
-          <div class="p-row"><b>PT20261009004</b><span class="tag t-green">已确认</span></div>
-          <div class="p-row"><span>拉手4寸 × 35,000件</span><b>1,750.00</b></div>
-          <div class="p-row"><span>10-10 审核 · 李审核</span><span style="color:var(--text-3)">0.0500/件</span></div>
-        </div>
+        <div class="p-card" style="color:var(--primary);text-align:center">＋ 再加一个产品</div>
+        <div class="p-photo">＋ 拍照上传（0/3）</div>
+        <div style="background:#F7F8FA;border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;font-size:13px"><span>合计工钱</span><b style="color:#00B42A;font-size:17px">600.00</b></div>
+        <div class="p-btn">提 交</div>
       </div>
-      <div class="p-tab"><span><i class="ic">▤</i>任务</span><span class="on"><i class="ic">👤</i>我的</span></div>
     </div></div>
   </div>
 </section>
@@ -654,13 +722,13 @@ CREATE TABLE idempotency_records (
     <tr><th>里程碑</th><th>交付</th><th>验收标准</th></tr>
     <tr><td>M1 基础+库存</td><td>认证/账号/RBAC、基础数据、库存+流水+调拨、审计日志</td><td>权限矩阵全接口生效；并发扣减无负库存；traceId 贯穿</td></tr>
     <tr><td>M2 进销存+打印</td><td>采购/销售/退货、计价引擎、拣货单+二联单打印</td><td>金额对账零误差（SQL 聚合 vs 单据合计）；打印模板可维护</td></tr>
-    <tr><td>M3 加工+计件+移动端</td><td>加工任务全流程、计件工资、移动端（提交/审核/工钱）、配送单</td><td>审核四联动事务原子性验证；弱网断点提交不丢数据</td></tr>
+    <tr><td>M3 加工+计件+移动端</td><td>配送单（发料）、报工单（员工自主多行）、审核（行级改数量）、计件工资、移动端（报工/工钱/审核/通知）</td><td>审核事务原子性验证（库存联动+计件入账+通知）；弱网断点提交不丢数据；计件产品白名单不泄露价格</td></tr>
     <tr><td>M4 账单+预警</td><td>月度账单、收款、账期/发货预警、备份恢复演练</td><td>预警 cron 幂等不重发；恢复演练通过</td></tr>
   </table>
-  <div class="callout c-ok" style="margin-top:16px"><b>评审确认点：</b>① 角色划分与权限矩阵（5.2）② 状态机约束（6）③ 精度与取整规则（8）④ 打印设备（针式二联）到位情况 ⑤ 里程碑顺序。确认后即可启动 M1 开发。</div>
+  <div class="callout c-ok" style="margin-top:16px"><b>v1.1 评审更新摘要（七轮意见全部并入）：</b>① 报工单模型重做：员工自主多行报工、审核行级改数量（原因必填）、approved 锁定、作废红冲、提交前可撤回 ② 计件产品白名单可见（指定账号/员工标签，防价格泄露）③ 产品/仓库通用字段铺开（对照 jshERP：分类树/型号/规格/品牌/条码等，选填留空，必填仅 5 项）④ 统一三时间规范（biz_date/created_at/环节时间）⑤ 供应商档案 + 期初库存补缺 ⑥ 应用内通知（不做弹窗推送，预留公众号 emitter）⑦ 员工端极简化 + 统一查询规范 + 计件/库存报表。<b>待最终确认点：</b>角色矩阵（5.2）、状态机（6）、精度规则（8）、针式打印机到位、里程碑顺序。确认后启动 M1。</div>
 </section>
 
-<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.0 · 2026-10-15 · 待评审</p>
+<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.1 · 2026-10-15 · 评审更新完毕</p>
 </main>
 </div>
 </body>
