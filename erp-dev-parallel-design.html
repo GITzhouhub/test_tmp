@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERP 开发设计 · 组件拆分与并行开发计划</title>
+<style>
+  :root{
+    --primary:#165DFF;--primary-light:#E8F3FF;--success:#00B42A;--success-light:#E8FFEA;
+    --warn:#FF7D00;--warn-light:#FFF7E8;--danger:#F53F3F;--danger-light:#FFECE8;
+    --text-1:#1D2129;--text-2:#4E5969;--text-3:#86909C;--border:#E5E6EB;--bg:#F2F3F5;
+    --mono:"SF Mono",Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text-1);font-size:14px;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px}
+  header{background:linear-gradient(135deg,#165DFF 0%,#0E42D2 100%);color:#fff;border-radius:8px;padding:28px 32px;margin-bottom:20px}
+  header h1{font-size:22px;font-weight:600;margin-bottom:8px}
+  header p{opacity:.85;font-size:13px}
+  .meta{display:flex;gap:24px;margin-top:14px;flex-wrap:wrap}
+  .meta span{font-size:12px;opacity:.9;background:rgba(255,255,255,.15);padding:3px 12px;border-radius:12px}
+  section{background:#fff;border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin-bottom:20px}
+  h2{font-size:18px;font-weight:600;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:16px;display:flex;align-items:center;gap:10px}
+  h2 .no{background:var(--primary);color:#fff;width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  h3{font-size:15px;font-weight:600;margin:18px 0 10px;color:var(--text-1)}
+  p{color:var(--text-2);margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  th{background:#F7F8FA;text-align:left;padding:9px 12px;border:1px solid var(--border);font-weight:600;white-space:nowrap}
+  td{padding:9px 12px;border:1px solid var(--border);color:var(--text-2);vertical-align:top}
+  td b{color:var(--text-1)}
+  code{font-family:var(--mono);font-size:12px;background:#F2F3F5;padding:1px 6px;border-radius:3px;color:#0E42D2}
+  pre{background:#1D2129;color:#E5E6EB;border-radius:6px;padding:16px;overflow-x:auto;font-size:12.5px;line-height:1.7;margin:10px 0}
+  pre code{background:none;color:inherit;padding:0}
+  .tag{display:inline-block;padding:1px 10px;border-radius:10px;font-size:11.5px;white-space:nowrap}
+  .t-p0{background:var(--danger-light);color:var(--danger);font-weight:600}
+  .t-p1{background:var(--warn-light);color:var(--warn);font-weight:600}
+  .t-p2{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .t-p3{background:#F2F3F5;color:var(--text-2)}
+  .t-ok{background:var(--success-light);color:var(--success)}
+  .t-mut{background:#F2F3F5;color:var(--text-3)}
+  .callout{border-radius:6px;padding:12px 16px;margin:12px 0;font-size:13px}
+  .c-info{background:var(--primary-light);border-left:3px solid var(--primary)}
+  .c-warn{background:var(--warn-light);border-left:3px solid var(--warn)}
+  .c-ok{background:var(--success-light);border-left:3px solid var(--success)}
+  .layers{display:flex;flex-direction:column;gap:10px;margin:14px 0}
+  .layer{border:1.5px solid var(--border);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .layer .lname{font-weight:600;font-size:13px;width:130px;flex-shrink:0}
+  .layer .ldesc{font-size:12px;color:var(--text-3);width:100%}
+  .l0{border-color:var(--danger);background:#FFFBFB}
+  .l1{border-color:var(--warn);background:#FFFEFB}
+  .l2{border-color:var(--primary);background:#FAFBFF}
+  .l3{border-color:var(--success);background:#FBFFFC}
+  .chip{background:#fff;border:1px solid var(--border);border-radius:5px;padding:3px 10px;font-size:12px;font-family:var(--mono);color:var(--text-2)}
+  .dep{font-family:var(--mono);font-size:12px}
+  .lane{display:grid;grid-template-columns:110px repeat(4,1fr);border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12.5px}
+  .lane>div{padding:10px 12px;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+  .lane>div:nth-child(5n){border-right:none}
+  .lane .lh{background:#F7F8FA;font-weight:600;text-align:center}
+  .lane .lname2{background:#F7F8FA;font-weight:600;display:flex;align-items:center}
+  .lane .cell{min-height:58px;color:var(--text-2)}
+  .lane .cell b{display:block;font-size:12.5px}
+  .lane .cell span{font-size:11.5px;color:var(--text-3)}
+  ul{padding-left:20px;color:var(--text-2);margin:8px 0}
+  li{margin-bottom:6px}
+  footer{text-align:center;color:var(--text-3);font-size:12px;padding:8px 0 24px}
+  .toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:12px}
+  .toc a{color:var(--text-2);text-decoration:none;font-size:13px;background:#F7F8FA;border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:block}
+  .toc a:hover{border-color:var(--primary);color:var(--primary)}
+  .toc a b{color:var(--primary);font-family:var(--mono);margin-right:6px}
+  @media(max-width:768px){.wrap{padding:12px 8px}section{padding:16px}.lane{grid-template-columns:90px repeat(4,1fr);font-size:11px}.layer .lname{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>仓储进销存 ERP — 开发详细设计：组件拆分与并行开发计划</h1>
+  <p>本文档是《ERP MVP 设计文档 v1.3》的工程实施篇：将系统拆分为 12 个基础组件 + 11 个功能模块，定义契约接口、依赖矩阵、优先级（P0-P3）与三泳道并行开发计划。</p>
+  <div class="meta">
+    <span>版本 <b>v1.0</b></span><span>日期 <b>2026-10-15</b></span>
+    <span>依据 <b>erp-mvp-design.html v1.3（已冻结）</b></span><span>形态 <b>NestJS 单体 + monorepo</b></span>
+  </div>
+  <div class="toc">
+    <a href="#s1"><b>1</b>分层总览与拆分原则</a>
+    <a href="#s2"><b>2</b>基础组件（C1-C12）</a>
+    <a href="#s3"><b>3</b>功能模块（M1-M11）</a>
+    <a href="#s4"><b>4</b>核心契约接口</a>
+    <a href="#s5"><b>5</b>依赖矩阵与优先级</a>
+    <a href="#s6"><b>6</b>并行开发泳道计划</a>
+    <a href="#s7"><b>7</b>联调顺序与集成策略</a>
+    <a href="#s8"><b>8</b>工程结构与共享包</a>
+  </div>
+</header>
+
+<section id="s1">
+  <h2><span class="no">1</span>分层总览与拆分原则</h2>
+  <p><b>拆分目的：</b>基础组件先行（P0 一次建成、全局复用），功能模块按依赖分层并行开发，模块之间只通过<b>契约接口</b>通信，禁止横向直接读表——这是并发开发不打架的前提。</p>
+  <div class="layers">
+    <div class="layer l0">
+      <span class="lname">L0 基础组件层</span>
+      <span class="chip">C1 db</span><span class="chip">C2 auth</span><span class="chip">C3 rbac</span><span class="chip">C4 error</span><span class="chip">C5 decimal</span><span class="chip">C6 idempotency</span><span class="chip">C7 audit</span>
+      <span class="ldesc">横切基础设施，与业务无关。全部 P0，M1 前半段完成，是所有模块的地基。</span>
+    </div>
+    <div class="layer l1">
+      <span class="lname">L1 支撑组件层</span>
+      <span class="chip">C8 query 查询规范</span><span class="chip">C9 notify 通知</span><span class="chip">C12 file 文件</span>
+      <span class="ldesc">被多个业务模块共用的通用能力。P1，与基础数据模块同步开发。</span>
+    </div>
+    <div class="layer l2">
+      <span class="lname">L2 核心域层</span>
+      <span class="chip">M1 base 基础数据</span><span class="chip">M2 stock 库存核心</span><span class="chip">M3 price 计价引擎</span>
+      <span class="ldesc">被上层单据依赖的领域内核。base/stock 为 P0-P1；price 为 P1，可独立并行。</span>
+    </div>
+    <div class="layer l3a" style="border:1.5px solid var(--warn);border-radius:8px;padding:12px 16px;background:#FFFEFB">
+      <span class="lname" style="font-weight:600;font-size:13px;width:130px;flex-shrink:0">L3 业务单据层</span>
+      <span class="chip">M4 purchase 采购</span><span class="chip">M5 sales 销售</span><span class="chip">M6 process 配送发料</span><span class="chip">M7 piece 报工计件</span>
+      <span class="ldesc" style="font-size:12px;color:var(--text-3);width:100%">进销存与加工单据，仅依赖 L0-L2 契约。purchase/sales（P1）与 process/piece（P2）两条线并行。</span>
+    </div>
+    <div class="layer l3">
+      <span class="lname">L4 财务报表层</span>
+      <span class="chip">M8 bill 账单</span><span class="chip">M9 payable 应付</span><span class="chip">M10 report 报表</span><span class="chip">M11 alert 预警</span><span class="chip">C10 print 打印</span><span class="chip">C11 schedule 定时</span>
+      <span class="ldesc">依赖业务单据数据落库后才有意义。P2-P3，最后集成。</span>
+    </div>
+  </div>
+  <div class="callout c-warn"><b>三条铁律（并发开发的红线）：</b>① 模块间禁止直接 import 别的模块的 Prisma model / repository，只允许调用其导出的 service 方法（契约）② 契约接口签名由本文档第 4 节定义，改动需评审同步所有泳道 ③ 前后端共享的类型/权限码/错误码放 <code>packages/shared</code>，双端从同一处 import。</div>
+</section>
+
+<section id="s2">
+  <h2><span class="no">2</span>基础组件（C1-C12）</h2>
+  <p>基础组件 = 与具体业务无关的可复用基础设施。每个组件独立目录、独立单测，一次建成全局复用。</p>
+  <table>
+    <tr><th style="width:56px">编号</th><th style="width:100px">组件</th><th style="width:46px">优先级</th><th>职责与对外接口</th><th style="width:150px">验收标准</th></tr>
+    <tr><td><b>C1</b></td><td><b>db 数据库</b></td><td><span class="tag t-p0">P0</span></td><td>PrismaClient 单例工厂；迁移脚本规范（SQL 迁移进 Git）；<code>withTransaction(fn)</code> 统一事务包装（含超时与重试 advisory lock）</td><td>迁移可重复执行；事务包装单测通过</td></tr>
+    <tr><td><b>C2</b></td><td><b>auth 认证</b></td><td><span class="tag t-p0">P0</span></td><td>登录（bcrypt、5 次锁 15 分钟）、JWT 签发/刷新（payload 含角色权限码）、<code>token_version</code> 失效、must_change_password 拦截中间件、refreshToken httpOnly Cookie</td><td>旧 token 改密后失效；锁定与解锁正确</td></tr>
+    <tr><td><b>C3</b></td><td><b>rbac 权限</b></td><td><span class="tag t-p0">P0</span></td><td>权限码常量 + 角色→权限映射（写死代码，来源 shared 包）；<code>@RequirePermissions('sales:order:create')</code> 装饰器 + 全局 Guard；多角色取并集</td><td>矩阵全接口生效（对照 v1.3 §5.2）</td></tr>
+    <tr><td><b>C4</b></td><td><b>error 错误</b></td><td><span class="tag t-p0">P0</span></td><td>全局 ExceptionFilter → 统一响应 <code>{code,message,data,traceId}</code>；业务错误码枚举（shared）；pino 日志（按天切割、错误独立文件、traceId 贯穿）</td><td>任意异常不裸奔 500；日志可按 traceId 追溯</td></tr>
+    <tr><td><b>C5</b></td><td><b>decimal 精度</b></td><td><span class="tag t-p0">P0</span></td><td>decimal.js 封装：<code>mul/round2/roundHalfUp</code>；金额数量 DTO 全局序列化为字符串；禁止 number 传入的 lint 规则</td><td>0.1+0.2 类用例全过；API 出参全是字符串</td></tr>
+    <tr><td><b>C6</b></td><td><b>idempotency 幂等</b></td><td><span class="tag t-p0">P0</span></td><td>POST 拦截器：读 <code>Idempotency-Key</code> 头 → 查表 → processing 则返回 1302 / done 则返回原单；事务内写记录</td><td>连点/重放测试只产生一单</td></tr>
+    <tr><td><b>C7</b></td><td><b>audit 审计</b></td><td><span class="tag t-p0">P0</span></td><td><code>@Audit('piece:approve')</code> 切面：事务内写 before/after JSON + IP；覆盖审核/红冲/改价/重置密码/库存调整/作废</td><td>六类操作均留痕可查</td></tr>
+    <tr><td><b>C8</b></td><td><b>query 查询规范</b></td><td><span class="tag t-p1">P1</span></td><td>统一列表查询构造器：筛选字段白名单（防注入）、排序白名单、分页、<b>全量合计行</b>（SQL 单独 SUM）、Excel 导出（上限 1 万行）</td><td>排序/筛选字段白名单外被拒</td></tr>
+    <tr><td><b>C9</b></td><td><b>notify 通知</b></td><td><span class="tag t-p1">P1</span></td><td><code>emit(userId, type, title, ref)</code> 接口 + 应用内 emitter 实现（写 notifications 表）；渠道可插拔，后期加公众号 emitter</td><td>审核结果通知员工闭环</td></tr>
+    <tr><td><b>C10</b></td><td><b>print 打印</b></td><td><span class="tag t-p2">P2</span></td><td>hiprint 模板 CRUD（JSON 存库 +version）；按单据数据渲染打印（拣货单/二联/配送单）；PDF 生成（单例 puppeteer，低并发够用）</td><td>模板在线可改；二联针式打印对齐</td></tr>
+    <tr><td><b>C11</b></td><td><b>schedule 定时</b></td><td><span class="tag t-p2">P2</span></td><td>@nestjs/schedule 封装：账期/逾期/发货预警 cron（幂等不重发）；PM2 双实例下用 pg advisory lock 防双跑</td><td>双实例同时跑仅产生一份预警</td></tr>
+    <tr><td><b>C12</b></td><td><b>file 文件</b></td><td><span class="tag t-p1">P1</span></td><td>图片上传（报工照片/产品图）：本地磁盘分目录 + 静态服务；大小/类型校验；预留 S3 适配接口（多租户按企业分桶）</td><td>3MB 限制生效；路径穿越防护</td></tr>
+  </table>
+  <div class="callout c-info"><b>组件完成定义（DoD）：</b>接口签名 + 单测 + README（一段话用法示例）+ 在沙盒 demo 里被至少一个调用方真实引用。未达 DoD 的组件不阻塞其他泳道（调用方先用第 4 节契约 mock）。</div>
+</section>
+
+<section id="s3">
+  <h2><span class="no">3</span>功能模块（M1-M11）</h2>
+  <p>功能模块 = 业务域。每个模块自持 controller/service/repository 三层，只暴露 service 契约给其他模块。</p>
+  <table>
+    <tr><th style="width:56px">编号</th><th style="width:110px">模块</th><th style="width:46px">优先级</th><th>职责</th><th style="width:170px">依赖</th><th>对外契约（供他模块调用）</th></tr>
+    <tr><td><b>M1</b></td><td><b>base 基础数据</b></td><td><span class="tag t-p0">P0</span></td><td>物料（含分类/包装/条码/均价字段维护）、仓库（含员工虚拟仓）、客户（等级/期初欠款）、供应商（账期/期初应付）、员工（标签/本地外地）、期初库存录入入口</td><td class="dep">C1-C7, C12</td><td><code>getVirtualWarehouseId(employeeId)</code>；物料/客户/供应商档案查询</td></tr>
+    <tr><td><b>M2</b></td><td><b>stock 库存核心</b></td><td><span class="tag t-p0">P0</span></td><td>stock 表 + stock_ledger 流水；<b>moveStock 唯一库存入口</b>（条件更新防负库存、balance_after、行锁）；调拨/调整单；库存总览三视图 + 流水查询</td><td class="dep">C1-C5, C8; M1（物料/仓库档案）</td><td><code>moveStock(tx, moves[], bizType, bizNo)</code>；库存查询 <code>getQty(warehouseId, materialId)</code></td></tr>
+    <tr><td><b>M3</b></td><td><b>price 计价引擎</b></td><td><span class="tag t-p1">P1</span></td><td>price_rules 维护；取价优先级（专属&gt;等级&gt;标准）；包装换算（件价×base_qty，过程中不取整）；min_unit/discount 双模式；快照字段生成（price/price_base/price_source）</td><td class="dep">C5; M1（档案）</td><td><code>getPrice(customerId, materialId, packageId, bizDate)</code> → 快照对象</td></tr>
+    <tr><td><b>M4</b></td><td><b>purchase 采购</b></td><td><span class="tag t-p1">P1</span></td><td>采购入库（含移动加权均价更新，同事务）、采购退货红字（冲库存+冲应付+成本冲回）</td><td class="dep">M2(moveStock), M1; C6,C7</td><td>采购单查询（应付模块聚合用）</td></tr>
+    <tr><td><b>M5</b></td><td><b>sales 销售</b></td><td><span class="tag t-p1">P1</span></td><td>销售订单（包装计价、draft 改价权限+审计、confirm 锁快照、出库成本快照）、拣货执行（事务出库）、销售退货红字、二联单数据组装</td><td class="dep">M2(moveStock), M3(getPrice), M1; C6,C7,C10</td><td>销售单查询（账单/报表聚合用）</td></tr>
+    <tr><td><b>M6</b></td><td><b>process 配送发料</b></td><td><span class="tag t-p2">P2</span></td><td>配送单（多行发料）：确认发料 = 实体仓→员工虚拟仓 moveStock；配送单打印数据</td><td class="dep">M2(moveStock), M1(getVirtualWarehouseId); C10</td><td>员工仓在制量查询</td></tr>
+    <tr><td><b>M7</b></td><td><b>piece 报工计件</b></td><td><span class="tag t-p2">P2</span></td><td>报工单（员工多行自主提交、白名单产品+我的工价、提交前撤回）；审核（行级改数量原因必填、单事务：output_material_id 库存联动 + 计件入账 + 通知）；作废红冲；我的工钱；计件报表（员工/物料/月矩阵）</td><td class="dep">M2(moveStock), M1; C5,C6,C7,C9, C12</td><td>计件工钱聚合（毛利报表用）</td></tr>
+    <tr><td><b>M8</b></td><td><b>bill 账单</b></td><td><span class="tag t-p2">P2</span></td><td>月度账单生成（幂等；首期并入客户期初欠款）、收款登记（不可超额）、账单查询</td><td class="dep">M5(销售查询), M1; C6,C9</td><td>应收汇总</td></tr>
+    <tr><td><b>M9</b></td><td><b>payable 应付</b></td><td><span class="tag t-p2">P2</span></td><td>供应商付款登记（一付多单核销 payment_refs）、应付报表（期初+采购−付款−退货实时聚合）</td><td class="dep">M4(采购查询), M1; C6</td><td>应付汇总</td></tr>
+    <tr><td><b>M10</b></td><td><b>report 报表</b></td><td><span class="tag t-p3">P3</span></td><td>销售报表（客户/月/物料，退货净额）、毛利报表（销售−出库成本−计件工钱）；全部只读、走各模块契约 service、SQL 聚合</td><td class="dep">M4,M5,M7 契约; C8</td><td>—（终端消费方）</td></tr>
+    <tr><td><b>M11</b></td><td><b>alert 预警</b></td><td><span class="tag t-p3">P3</span></td><td>账期到期前 3 天、逾期 1/7/15 分级、发货超期；alert_records + 通知联动（finance/sales 角色）</td><td class="dep">M5,M8; C9,C11</td><td>—（终端消费方）</td></tr>
+  </table>
+  <div class="callout c-info"><b>前端对应拆分：</b>PC 端按同样 11 个模块组织路由与页面目录；移动端独立应用仅含 报工/工钱/审核/通知/单据查看 五块，只依赖 M7、C2、C9 与打印查看接口——移动端可与 PC 端完全并行。</div>
+</section>
+
+<section id="s4">
+  <h2><span class="no">4</span>核心契约接口（并行开发的关键）</h2>
+  <p>以下 5 个契约是模块间的全部耦合点。<b>先定签名、再各自开发、最后联调</b>——签名在联调前变更必须通知所有泳道。</p>
+  <h3>4.1 moveStock —— 库存变动唯一入口（M2 提供，M4/M5/M6/M7 消费）</h3>
+<pre><code>interface StockMove {
+  warehouseId: number; materialId: number;
+  qtyChange: Decimal;        // 正=入库 负=出库（基础单位数量）
+}
+// 返回每笔 balance_after；库存不足抛 BizError(1301)，整个事务回滚
+moveStock(tx, moves: StockMove[], ctx: {bizType, bizNo, operatorId}): Promise&lt;BalanceAfter[]&gt;</code></pre>
+  <h3>4.2 getPrice —— 计价唯一入口（M3 提供，M5 消费）</h3>
+<pre><code>getPrice(tx, args: {customerId, materialId, packageId, bizDate}): Promise&lt;{
+  price: Decimal;        // 该包装单价（元/袋）
+  priceBase: Decimal;    // 参考件价（元/件）
+  priceSource: 'exclusive'|'level'|'fallback';
+}&gt;
+// 折扣模式也在此内完成换算；manual 改价由 sales 模块覆盖并标 source=manual</code></pre>
+  <h3>4.3 getVirtualWarehouseId（M1 提供，M6/M7 消费）</h3>
+<pre><code>getVirtualWarehouseId(tx, employeeId: number): Promise&lt;number&gt;  // 不存在则同事务创建</code></pre>
+  <h3>4.4 emit —— 通知（C9 提供，M7/M8/M11 消费）</h3>
+<pre><code>emit(tx, {userId, type, title, content?, refType?, refId?}): Promise&lt;void&gt;</code></pre>
+  <h3>4.5 更新均价 —— 成本入口（M2 提供，M4 消费）</h3>
+<pre><code>// 采购入库事务内调用：新均价=(旧量×旧均价+入量×采购价)/(旧量+入量)，Decimal 精确
+updateAvgCost(tx, {materialId, inQty, inUnitPrice}): Promise&lt;void&gt;</code></pre>
+  <div class="callout c-warn"><b>Mock 策略：</b>每个契约在 <code>packages/shared</code> 定义 TS interface + 一个内存 mock 实现。上游未就绪时，下游 import mock 联调页面与流程；上游就绪后换真实 import，<b>业务代码零改动</b>。</div>
+</section>
+
+<section id="s5">
+  <h2><span class="no">5</span>依赖矩阵与优先级</h2>
+  <h3>5.1 优先级定义</h3>
+  <table>
+    <tr><th style="width:70px">优先级</th><th>含义</th><th style="width:230px">对应里程碑</th></tr>
+    <tr><td><span class="tag t-p0">P0</span></td><td>地基：缺了它任何业务模块无法开工/无法上线</td><td>M1 里程碑前半段</td></tr>
+    <tr><td><span class="tag t-p1">P1</span></td><td>核心业务闭环：进销存+打印可上线收钱</td><td>M1 后半段 + M2 里程碑</td></tr>
+    <tr><td><span class="tag t-p2">P2</span></td><td>生产与财务：加工计件+账单应付+移动端</td><td>M3 里程碑</td></tr>
+    <tr><td><span class="tag t-p3">P3</span></td><td>增值：报表与预警（数据积累后才有意义）</td><td>M4 里程碑</td></tr>
+  </table>
+  <h3>5.2 依赖矩阵（行依赖列，●=强依赖必须先行，○=弱依赖可 mock 并行）</h3>
+  <table>
+    <tr><th>↓ 依赖 \ 被依赖 →</th><th>L0 组件</th><th>M1 base</th><th>M2 stock</th><th>M3 price</th><th>M4 purch</th><th>M5 sales</th><th>M7 piece</th><th>C10 print</th></tr>
+    <tr><td><b>M1 base</b> <span class="tag t-p0">P0</span></td><td>●</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><b>M2 stock</b> <span class="tag t-p0">P0</span></td><td>●</td><td>○</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><b>M3 price</b> <span class="tag t-p1">P1</span></td><td>●</td><td>○</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><b>M4 purchase</b> <span class="tag t-p1">P1</span></td><td>●</td><td>○</td><td>●</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><b>M5 sales</b> <span class="tag t-p1">P1</span></td><td>●</td><td>○</td><td>●</td><td>○</td><td>—</td><td>—</td><td>—</td><td>○</td></tr>
+    <tr><td><b>M6 process</b> <span class="tag t-p2">P2</span></td><td>●</td><td>○</td><td>●</td><td>—</td><td>—</td><td>—</td><td>—</td><td>○</td></tr>
+    <tr><td><b>M7 piece</b> <span class="tag t-p2">P2</span></td><td>●</td><td>○</td><td>●</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><b>M8 bill / M9 payable</b> <span class="tag t-p2">P2</span></td><td>●</td><td>○</td><td>—</td><td>—</td><td>○</td><td>○</td><td>—</td><td>—</td></tr>
+    <tr><td><b>M10 report</b> <span class="tag t-p3">P3</span></td><td>●</td><td>○</td><td>—</td><td>—</td><td>○</td><td>○</td><td>○</td><td>—</td></tr>
+    <tr><td><b>M11 alert</b> <span class="tag t-p3">P3</span></td><td>●</td><td>○</td><td>—</td><td>—</td><td>—</td><td>○</td><td>—</td><td>—</td></tr>
+  </table>
+  <p style="font-size:12.5px;color:var(--text-3)">结论：<b>唯一的串行硬链是 L0 组件 → M2 stock（moveStock）</b>。其余模块对 base 的依赖可用 mock 档案数据绕开，对 price/print 是弱依赖——因此 P1 起即可三泳道全面铺开。</p>
+</section>
+
+<section id="s6">
+  <h2><span class="no">6</span>并行开发泳道计划</h2>
+  <p>按 3 条泳道设计（2-3 名开发；2 人时 C 泳道并入 A/B 空档）。列 = 里程碑阶段，与 v1.3 第 14 节验收标准对应。</p>
+  <div class="lane">
+    <div class="lh">泳道 \ 阶段</div><div class="lh">M1 前半（P0）</div><div class="lh">M1 后半→M2（P1）</div><div class="lh">M3（P2）</div><div class="lh">M4（P3）</div>
+    <div class="lname2">A 后端核心</div>
+    <div class="cell"><b>C1-C7 全部</b><span>db/auth/rbac/error/decimal/幂等/审计</span></div>
+    <div class="cell"><b>M2 stock + M1 base</b><span>moveStock 契约、三视图、基础档案 API</span></div>
+    <div class="cell"><b>M6 process + M7 piece</b><span>配送发料、报工审核事务、工钱</span></div>
+    <div class="cell"><b>M10 report</b><span>销售/毛利报表 SQL 聚合</span></div>
+    <div class="lname2">B 后端业务+打印</div>
+    <div class="cell"><b>shared 包 + 契约定义</b><span>类型/权限码/错误码/mock（P0 交付物）</span></div>
+    <div class="cell"><b>M3 price → M4/M5</b><span>计价引擎、采购销售退货、C10 打印</span></div>
+    <div class="cell"><b>M8 bill + M9 payable</b><span>账单收款、付款核销、C11 定时</span></div>
+    <div class="cell"><b>M11 alert</b><span>账期/发货预警 cron</span></div>
+    <div class="lname2">C 前端双端</div>
+    <div class="cell"><b>PC 框架 + 登录</b><span>Arco 布局/路由守卫/v-permission/axios 封装</span></div>
+    <div class="cell"><b>PC 基础+库存+进销存页</b><span>统一查询规范组件、订单/拣货、打印联调</span></div>
+    <div class="cell"><b>移动端 H5+APP</b><span>报工/工钱/审核/通知、Capacitor 壳</span></div>
+    <div class="cell"><b>报表页 + UAT</b><span>报表页面、全链路验收测试</span></div>
+  </div>
+  <h3>6.1 泳道交接物（每阶段结束必须交付，下一阶段消费）</h3>
+  <table>
+    <tr><th>阶段末</th><th>A 交付</th><th>B 交付</th><th>C 消费</th></tr>
+    <tr><td>M1 前半末</td><td>C1-C7 可用 + demo 接口</td><td><code>packages/shared</code> 全量契约 + mock</td><td>PC 骨架接真实登录</td></tr>
+    <tr><td>M2 末</td><td>base/stock API + 种子数据脚本</td><td>price/purchase/sales API + 拣货/二联打印模板</td><td>进销存全页面可演示</td></tr>
+    <tr><td>M3 末</td><td>process/piece API + 审核事务</td><td>bill/payable API + cron</td><td>移动端可发员工试用</td></tr>
+  </table>
+  <div class="callout c-ok"><b>关键路径：</b>C1-C7（A 泳道）→ M2 moveStock（A）→ M5 sales（B）→ M7 piece（A）→ M8 bill（B）。这条链最长，任何延误直接顺延里程碑；其余工作都有浮动时间。</div>
+</section>
+
+<section id="s7">
+  <h2><span class="no">7</span>联调顺序与集成策略</h2>
+  <ul>
+    <li><b>契约先行</b>：第 4 节 5 个契约 + shared 包是第一周唯一必须完成的事，之后三泳道立即并行</li>
+    <li><b>mock → 真实替换</b>：模块开发期用 mock 契约自测页面流程；上游就绪后 <code>jest.mock</code> 换真实 import，跑契约一致性测试（同一组用例对 mock 与真实实现断言相同结果）</li>
+    <li><b>集成顺序</b>（每步都是可演示增量）：登录+RBAC → 基础数据+库存 → 采购→销售→打印 → 配送→报工→移动端 → 账单→应付→报表→预警</li>
+    <li><b>事务联调专项</b>：审核四联动（库存+计件+通知+审计）、拣货出库、采购均价更新三处必须在集成环境用失败注入验证原子性</li>
+    <li><b>分支策略</b>：main 保护；每泳道 feature/* 分支；契约文件（shared）改动走 PR + 双泳道评审</li>
+  </ul>
+</section>
+
+<section id="s8">
+  <h2><span class="no">8</span>工程结构与共享包</h2>
+<pre><code>erp/                                  # pnpm monorepo
+├─ apps/
+│  ├─ api/                            # NestJS 单体（C1-C12 + M1-M11 各占 src/ 一级目录）
+│  │  └─ src/
+│  │     ├─ infra/                    # C1-C12 基础组件（auth/rbac/error/decimal/...）
+│  │     ├─ modules/                  # M1-M11 功能模块（每模块 controller/service/repository）
+│  │     └─ main.ts
+│  ├─ pc/                             # Vue3 + Arco（管理端）
+│  └─ mobile/                         # Vue3 + Vant（/m H5，Capacitor 套壳出 APP）
+├─ packages/
+│  └─ shared/                         # ★ 并行开发的锚点
+│     ├─ types/                       # 契约 interface（moveStock/getPrice/...）
+│     ├─ permissions/                 # 权限码常量 + 角色映射（前后端同源）
+│     ├─ error-codes/                 # 错误码枚举与文案
+│     └─ mocks/                       # 契约 mock 实现
+└─ pnpm-workspace.yaml</code></pre>
+  <ul>
+    <li><b>shared 包是并发开发的核心机制</b>：前后端、三个泳道全部从它 import 类型与常量，杜绝"字段对不上"类联调事故</li>
+    <li>模块目录边界用 ESLint <code>no-restricted-imports</code> 强制（modules/* 之间禁止深层 import，只允许 index.ts 导出的契约）</li>
+    <li>数据库迁移只允许从 api 仓库发出（单一迁移源，避免并行改表冲突）；DDL 基准 = v1.3 设计文档第 4 节</li>
+  </ul>
+  <div class="callout c-info"><b>与 v1.3 的关系：</b>业务规则（DDL/权限矩阵/状态机/精度/页面原型/打印规格）以 <b>erp-mvp-design.html v1.3</b> 为准；工程拆分、契约、优先级与并行计划以本文档为准。两份文档冲突时以 v1.3 为准并回改本文档。</div>
+</section>
+
+<footer>ERP 开发设计 · 组件拆分与并行开发计划 v1.0 · 2026-10-15 · 依据 erp-mvp-design.html v1.3</footer>
+</div>
+</body>
+</html>
