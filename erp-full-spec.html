@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERP 完整详细设计规格 · 字段 / API / 页面 / 错误 / 日志</title>
+<style>
+:root{
+  --primary:#165DFF; --primary-hover:#4080FF; --primary-bg:#E8F3FF;
+  --success:#00B42A; --success-bg:#E8FFEA; --warning:#FF7D00; --warning-bg:#FFF7E8;
+  --danger:#F53F3F; --danger-bg:#FFECE8; --purple:#722ED1; --purple-bg:#F5E8FF;
+  --text:#1D2129; --text-2:#4E5969; --text-3:#86909C; --border:#E5E6EB; --fill:#F7F8FA;
+  --radius:4px; --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);color:var(--text);background:var(--fill);font-size:14px;line-height:1.7}
+.layout{display:flex;min-height:100vh}
+.toc{width:240px;background:#fff;border-right:1px solid var(--border);padding:24px 0;position:fixed;top:0;bottom:0;overflow-y:auto}
+.toc h1{font-size:15px;padding:0 20px 12px;border-bottom:1px solid var(--border);margin-bottom:12px;color:var(--primary)}
+.toc a{display:block;padding:6px 20px;color:var(--text-2);text-decoration:none;font-size:13px;border-left:2px solid transparent}
+.toc a:hover{color:var(--primary);background:var(--primary-bg)}
+.toc a.sub{padding-left:32px;font-size:12px;color:var(--text-3)}
+.main{flex:1;margin-left:240px;padding:32px 40px;max-width:1100px}
+section{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;margin-bottom:24px}
+h2{font-size:20px;padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+h2 .no{background:var(--primary);color:#fff;font-size:12px;padding:2px 8px;border-radius:10px;font-weight:500}
+h3{font-size:16px;margin:22px 0 10px;color:var(--text)}
+h3::before{content:"";display:inline-block;width:3px;height:14px;background:var(--primary);margin-right:8px;vertical-align:-2px}
+h4{font-size:14px;margin:16px 0 8px;color:var(--text-2)}
+p{margin:8px 0;color:var(--text-2)}
+ul,ol{margin:8px 0 8px 22px;color:var(--text-2)}
+li{margin:4px 0}
+code{font-family:var(--mono);background:var(--fill);border:1px solid var(--border);padding:1px 5px;border-radius:3px;font-size:12.5px;color:var(--danger)}
+pre{background:#1D2129;color:#C9D1D9;padding:16px 18px;border-radius:var(--radius);overflow-x:auto;margin:12px 0;font-size:12.5px;line-height:1.6}
+pre code{background:none;border:none;color:inherit;padding:0}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+th{background:var(--fill);color:var(--text-2);font-weight:500;text-align:left;padding:8px 12px;border:1px solid var(--border);white-space:nowrap}
+td{padding:8px 12px;border:1px solid var(--border);color:var(--text-2);vertical-align:top}
+td:first-child{color:var(--text);white-space:nowrap}
+td code{white-space:nowrap}
+.tag{display:inline-block;font-size:12px;padding:1px 10px;border-radius:10px;margin:1px 2px;white-space:nowrap}
+.t-blue{background:var(--primary-bg);color:var(--primary)} .t-green{background:var(--success-bg);color:var(--success)}
+.t-orange{background:var(--warning-bg);color:var(--warning)} .t-red{background:var(--danger-bg);color:var(--danger)}
+.t-purple{background:var(--purple-bg);color:var(--purple)} .t-gray{background:var(--fill);color:var(--text-3)}
+.callout{border-radius:var(--radius);padding:12px 16px;margin:12px 0;font-size:13px}
+.c-info{background:var(--primary-bg);border:1px solid #BEDAFF;color:var(--text-2)}
+.c-warn{background:var(--warning-bg);border:1px solid #FFDDBF;color:var(--text-2)}
+.c-danger{background:var(--danger-bg);border:1px solid #FDCCC5;color:var(--text-2)}
+.c-ok{background:var(--success-bg);border:1px solid #AFF0B5;color:var(--text-2)}
+.meta{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--text-3);padding:14px 0;border-bottom:1px solid var(--border);margin-bottom:20px}
+.meta b{color:var(--text-2);font-weight:500}
+/* arch diagram */
+.arch{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.arch .arow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.abox{background:#fff;border:1.5px solid var(--border);border-radius:6px;padding:8px 14px;font-size:12.5px;color:var(--text-2);text-align:center;flex:1;min-width:140px}
+.abox b{display:block;color:var(--text);font-size:13px}
+.abox small{color:var(--text-3);font-size:11px}
+.abox.wide{flex:none;width:100%}
+.abox.nest{background:var(--primary-bg);border-color:#BEDAFF;padding:10px 14px}
+.abox.nest .inner{display:inline-block;background:#fff;border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin:4px 4px 0 0;font-size:11.5px;color:var(--text-2)}
+.arrow-down{text-align:center;color:var(--text-3);font-size:12px;margin:2px 0}
+/* mockups */
+.mock-label{font-size:12px;color:var(--text-3);margin:14px 0 8px;display:flex;align-items:center;gap:8px}
+.mock-label::before{content:"◈";color:var(--primary)}
+.frame{border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:0 2px 8px rgba(29,33,41,.06)}
+.pc{background:#F2F3F5;font-family:var(--font)}
+.pc-top{height:44px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;font-size:13px}
+.pc-top .logo{color:var(--primary);font-weight:600}
+.pc-top .crumb{color:var(--text-3);font-size:12px}
+.pc-top .user{margin-left:auto;color:var(--text-2);font-size:12px;display:flex;align-items:center;gap:6px}
+.pc-top .avatar{width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+.pc-body{display:flex}
+.pc-side{width:150px;background:#fff;border-right:1px solid var(--border);padding:10px 0;font-size:12.5px}
+.pc-side .mi{padding:8px 16px;color:var(--text-2)}
+.pc-side .mi.on{background:var(--primary-bg);color:var(--primary);border-right:2px solid var(--primary);font-weight:500}
+.pc-cont{flex:1;padding:12px}
+.pc-toolbar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.inp{background:#fff;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-size:12px;color:var(--text-3);min-width:110px}
+.btn{border-radius:3px;padding:4px 14px;font-size:12px;cursor:default;white-space:nowrap}
+.b-pri{background:var(--primary);color:#fff} .b-plain{background:#fff;border:1px solid var(--border);color:var(--text-2)}
+.b-danger{background:#fff;border:1px solid var(--danger);color:var(--danger)}
+.b-green{background:var(--success);color:#fff}
+table.mtab{font-size:12px;margin:0}
+table.mtab th{padding:7px 10px;white-space:nowrap}
+table.mtab td{padding:7px 10px;white-space:nowrap}
+table.mtab tr.sum-row td{background:var(--fill);font-weight:600;color:var(--text)}
+.pg{display:flex;gap:4px;justify-content:flex-end;margin-top:8px;font-size:12px}
+.pg i{font-style:normal;border:1px solid var(--border);background:#fff;padding:2px 9px;border-radius:3px;color:var(--text-2)}
+.pg i.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.pctabs{display:flex;gap:2px;border-bottom:1px solid var(--border);background:#fff;font-size:12.5px;margin-bottom:10px}
+.pctabs span{padding:7px 16px;color:var(--text-3);border-bottom:2px solid transparent}
+.pctabs span.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+/* stat cards */
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+.stat{background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px 14px;cursor:default}
+.stat .num{font-size:22px;font-weight:600;color:var(--primary);font-family:var(--mono)}
+.stat .lb{font-size:12px;color:var(--text-3);margin-top:2px}
+.stat.warn .num{color:var(--warning)} .stat.danger .num{color:var(--danger)} .stat.ok .num{color:var(--success)}
+/* wizard */
+.wsteps{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin:10px 0}
+.wstep{flex:1;text-align:center;padding:8px 0;font-size:12.5px;color:var(--text-3);background:#fff;border-right:1px solid var(--border)}
+.wstep:last-child{border-right:none}
+.wstep.on{color:#fff;background:var(--primary)}
+.wstep.done{color:var(--success);background:var(--success-bg)}
+/* login mock */
+.login-wrap{height:320px;background:linear-gradient(135deg,#E8F3FF 0%,#F2F3F5 60%);display:flex;align-items:center;justify-content:center}
+.login-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:22px 26px;width:300px;box-shadow:0 4px 16px rgba(29,33,41,.08)}
+.login-logo{text-align:center;font-size:16px;font-weight:600;color:var(--primary);margin-bottom:14px}
+.login-field{font-size:12px;color:var(--text-2);margin:10px 0}
+.login-field input{display:block;width:100%;margin-top:4px;border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:13px;color:var(--text)}
+.login-tip{font-size:11px;color:var(--text-3);text-align:center;margin-top:10px}
+/* phone */
+.phones{display:flex;gap:20px;flex-wrap:wrap}
+.phone{width:270px;border:1px solid var(--border);border-radius:24px;background:#fff;padding:10px;box-shadow:0 2px 10px rgba(29,33,41,.08)}
+.phone .scr{border-radius:16px;overflow:hidden;background:var(--fill);position:relative}
+.p-status{background:#fff;padding:6px 14px 2px;font-size:10px;color:var(--text-3);display:flex;justify-content:space-between}
+.p-nav{background:#fff;padding:10px 14px;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
+.p-nav .arr{color:var(--text-3);font-weight:400}
+.p-body{padding:12px}
+.p-card{background:#fff;border-radius:8px;padding:12px;margin-bottom:10px;border:1px solid var(--border)}
+.p-row{display:flex;justify-content:space-between;font-size:12px;margin:5px 0;color:var(--text-2);align-items:center}
+.p-row b{color:var(--text);font-weight:500}
+.p-big{display:flex;gap:10px;margin-bottom:10px}
+.p-big .cell{flex:1;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.p-big .cell span{display:block;font-size:11px;color:var(--text-3)}
+.p-big .cell b{font-size:18px;font-family:var(--mono);font-weight:600}
+.p-photo{border:1px dashed var(--border);border-radius:6px;height:64px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:11px;background:#fff;margin-top:8px}
+.p-btn{background:var(--primary);color:#fff;text-align:center;border-radius:18px;padding:9px;font-size:13px;font-weight:500;margin-top:12px}
+.p-btn.ghost{background:#fff;color:var(--primary);border:1px solid var(--primary)}
+.p-btn.red{background:#fff;color:var(--danger);border:1px solid var(--danger)}
+.p-tab{display:flex;background:#fff;border-top:1px solid var(--border)}
+.p-tab span{flex:1;text-align:center;padding:7px 0 8px;font-size:10.5px;color:var(--text-3)}
+.p-tab span.on{color:var(--primary)}
+.p-tab .ic{display:block;font-size:15px;margin-bottom:1px}
+.p-fab{position:absolute;right:14px;bottom:58px;width:52px;height:52px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 4px 12px rgba(22,93,255,.4)}
+.p-step{display:flex;align-items:center;justify-content:space-between;background:#FFF7E8;border:1px solid #FFDDBF;border-radius:6px;padding:8px 10px;margin:8px 0;font-size:11.5px;color:var(--text-2)}
+.photos{display:flex;gap:6px}
+.photos .ph{width:44px;height:44px;border:1px solid var(--border);border-radius:4px;background:var(--fill);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-3)}
+/* print preview */
+.pprint{background:#fff;border:1px solid var(--border);padding:22px 26px;font-family:var(--mono);font-size:11.5px;color:#000;width:100%;max-width:560px;margin:0 auto}
+.pprint h5{text-align:center;font-size:14px;letter-spacing:2px;margin-bottom:4px;font-family:var(--font)}
+.pprint .sub{text-align:center;font-size:10px;color:#555;margin-bottom:10px}
+.pprint .ln{display:flex;justify-content:space-between;border-bottom:1px solid #999;padding:3px 0}
+.pprint table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11px}
+.pprint th,.pprint td{border:1px solid #666;padding:3px 6px;text-align:left}
+.pprint th{background:#eee}
+.pprint .grp{background:#f3f3f3;font-weight:600}
+.barcode{display:flex;align-items:flex-end;gap:2px;height:30px;justify-content:center;margin:8px 0}
+.barcode i{width:2px;background:#000;display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+@media(max-width:900px){.toc{display:none}.main{margin-left:0;padding:16px}}
+@media print{.toc{display:none}.main{margin:0;padding:0}section{border:none;padding:10px 0;break-inside:avoid-page}}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:10px 0}
+.kv .cell{background:var(--fill);border-radius:var(--radius);padding:10px 14px}
+.kv .cell b{display:block;font-size:12px;color:var(--text-3);font-weight:400;margin-bottom:2px}
+.kv .cell span{font-size:15px;color:var(--text);font-weight:500}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <h1>完整详细设计规格</h1>
+  <a href="#s1">1. 概述与三端开发目标</a>
+  <a class="sub" href="#s1-3">1.3 功能分配矩阵</a>
+  <a href="#s2">2. 技术架构与工程结构</a>
+  <a class="sub" href="#s2-3">2.3 monorepo 目录</a>
+  <a class="sub" href="#s2-5">2.5 环境与部署</a>
+  <a href="#s3">3. 数据库字段设计</a>
+  <a class="sub" href="#s3-11">3.11 索引与约束汇总</a>
+  <a class="sub" href="#s3-12">3.12 枚举值字典</a>
+  <a href="#s4">4. API 规范</a>
+  <a class="sub" href="#s4-2">4.2 全量接口清单</a>
+  <a class="sub" href="#s4-3">4.3 关键接口示例</a>
+  <a href="#s5">5. 错误处理格式</a>
+  <a href="#s6">6. 日志格式</a>
+  <a href="#s7">7. 页面设计与仿真</a>
+  <a class="sub" href="#s7-3">7.3 PC 端页面仿真</a>
+  <a class="sub" href="#s7-6">7.6 移动端页面仿真</a>
+  <a href="#s8">8. 打印模板规格</a>
+  <a href="#s9">9. 非功能设计</a>
+  <a href="#s10">10. 文档关系与变更记录</a>
+</nav>
+<main class="main">
+
+<section id="s0">
+  <h1 style="font-size:24px;margin-bottom:6px">仓储进销存 ERP — 完整详细设计规格</h1>
+  <div class="meta">
+    <span>版本 <b>v1.0</b></span><span>日期 <b>2026-10-15</b></span>
+    <span>依据 <b>erp-mvp-design.html v1.5（业务冻结）</b></span>
+    <span>依据 <b>erp-dev-parallel-design.html v1.0（工程拆分）</b></span>
+  </div>
+  <p>本文档是开发实现篇：把 v1.5 的业务设计展开到<b>字段级、接口级、页面级、日志级</b>，供前后端与移动端开发者直接对照开发。覆盖三端目标：<b>PC Web 管理端、移动端 Web（H5）、安卓 APP</b>。所有业务规则（状态机 / 权限矩阵 / 精度 / 打印规格）以 v1.5 为准，本文不改变任何已定决策，仅做实现细节的明确与补齐（补齐项在第 10 节集中列出供评审确认）。</p>
+</section>
+
+<section id="s1">
+  <h2><span class="no">1</span>系统概述与三端开发目标</h2>
+
+  <h3>1.1 三端形态</h3>
+  <table>
+    <tr><th style="width:110px">端</th><th style="width:150px">访问方式</th><th style="width:180px">技术</th><th>目标用户</th><th>定位</th></tr>
+    <tr><td><b>PC Web</b></td><td>浏览器访问 <code>https://erp.example.com/</code></td><td>Vue3 + Vite + Arco Design Vue</td><td>管理员 / 仓管 / 采购 / 销售 / 财务 / 审核员</td><td>全功能管理端：全部单据、档案、结算、报表、打印</td></tr>
+    <tr><td><b>移动端 Web（H5）</b></td><td>手机浏览器 / 微信内置浏览器访问 <code>/m</code></td><td>Vue3 + Vite + Vant4（独立构建，与 PC 分包）</td><td>员工（工人）/ 审核员</td><td>极简员工端：记工、我的钱、通知、审核、单据查看</td></tr>
+    <tr><td><b>安卓 APP</b></td><td>APK 侧载分发（不上架应用商店）</td><td>Capacitor 套壳 H5（同一套 <code>/m</code> 代码）</td><td>员工（工人）/ 审核员</td><td>H5 全部功能 + 原生增强（相机 / 安全存储 / 本地草稿 / 版本更新）</td></tr>
+  </table>
+
+  <h3>1.2 三端关系</h3>
+  <p>三端共用<b>同一套 REST API（<code>/api/v1</code>）与同一套 JWT 认证</b>，权限由后端 Guard 统一裁决，任何一端都不实现独立的业务规则。H5 与 APP 是同一代码库：<code>apps/mobile</code> 构建产物部署为 <code>/m</code>（H5），再用 Capacitor 包装出安卓工程打包 APK。三端差异仅在下表所列的宿主能力：</p>
+  <table>
+    <tr><th style="width:150px">能力</th><th style="width:170px">H5（浏览器）</th><th>安卓 APP（Capacitor）</th></tr>
+    <tr><td>accessToken 保持</td><td>内存（2h 失效）</td><td>内存 + Capacitor Preferences（持久化，冷启动恢复）</td></tr>
+    <tr><td>refreshToken 存储</td><td>httpOnly Cookie</td><td>SecureStorage（Android Keystore 加密）</td></tr>
+    <tr><td>拍照</td><td>浏览器 <code>&lt;input type=file capture&gt;</code>，压缩后上传</td><td>Capacitor Camera 插件（质量 60 / 最大边 1280 压缩），失败自动降级为浏览器方式</td></tr>
+    <tr><td>报工草稿（弱网重试）</td><td>localStorage（清理缓存可能丢失，提示用户）</td><td>Capacitor Filesystem（应用私有目录，可靠不丢）</td></tr>
+    <tr><td>版本更新</td><td>随服务端发布即时生效</td><td>启动时调 <code>GET /app/version</code> 检查，提示下载整包 APK</td></tr>
+    <tr><td>推送</td><td colspan="2">均不做系统推送；通知统一应用内（登录后 30s 轮询未读角标）；后期微信公众号 emitter 插件式接入</td></tr>
+  </table>
+
+  <h3 id="s1-3">1.3 功能分配矩阵（三端开发范围）</h3>
+  <p>●=完整功能　○=简化或只读　—=不提供。<b>每一行即一个开发任务包</b>，配合《并行开发计划》的泳道分配。</p>
+  <table>
+    <tr><th>功能</th><th style="width:70px">PC Web</th><th style="width:80px">移动 Web</th><th style="width:70px">安卓 APP</th><th>对应模块</th></tr>
+    <tr><td>登录 / 强制改密 / 通知角标</td><td>●</td><td>●</td><td>●</td><td>C2 / C9</td></tr>
+    <tr><td>工作台看板（四卡片穿透）</td><td>●</td><td>—</td><td>—</td><td>聚合查询</td></tr>
+    <tr><td>基础数据维护（物料/分类/包装/仓库/客户/供应商/员工/工价/价格规则/计件范围）</td><td>●</td><td>—</td><td>—</td><td>M1 / M3</td></tr>
+    <tr><td>库存查询（三视图 / 流水）</td><td>●</td><td>○ 简化版（仓库下拉+搜索）</td><td>○ 同 H5</td><td>M2</td></tr>
+    <tr><td>库存调拨 / 调整 / 期初录入</td><td>●</td><td>—</td><td>—</td><td>M2</td></tr>
+    <tr><td>采购入库 / 采购退货 / 付款登记 / 应付报表</td><td>●</td><td>—</td><td>—</td><td>M4 / M9</td></tr>
+    <tr><td>销售订单 / 拣货出库 / 销售退货</td><td>●</td><td>—</td><td>—</td><td>M5</td></tr>
+    <tr><td>配送单（发料管理）+ 打印</td><td>●</td><td>—</td><td>—</td><td>M6</td></tr>
+    <tr><td>报工提交（多行 + 拍照）</td><td>—</td><td>●</td><td>● 原生拍照增强</td><td>M7</td></tr>
+    <tr><td>报工撤回（审核前）</td><td>—</td><td>●</td><td>●</td><td>M7</td></tr>
+    <tr><td>报工审核（行级改数量 / 驳回）</td><td>●</td><td>● 审核 Tab</td><td>● 同 H5</td><td>M7</td></tr>
+    <tr><td>我的工钱（预提 / 已结）</td><td>—</td><td>●</td><td>●</td><td>M7</td></tr>
+    <tr><td>工资结算（圈选 / 批量 / 打单 / 指定日期确认 / 作废）</td><td>●</td><td>—</td><td>—</td><td>M7</td></tr>
+    <tr><td>账单生成 / 收款登记 / 预警处理</td><td>●</td><td>—</td><td>—</td><td>M8 / M11</td></tr>
+    <tr><td>报表（销售 / 毛利 / 计件 / 应付）+ 导出</td><td>●</td><td>—</td><td>—</td><td>M10</td></tr>
+    <tr><td>通知中心（列表 / 穿透单据）</td><td>● 顶栏铃铛+页面</td><td>● 底部 Tab</td><td>● 同 H5</td><td>C9</td></tr>
+    <tr><td>单据查看（拣货 / 配送 / 账单）</td><td>● 页面 + 打印</td><td>○ H5 渲染 + PDF 下载</td><td>○ 同 H5</td><td>C10</td></tr>
+    <tr><td>打印（6 类模板，静默打印）</td><td>●</td><td>—</td><td>—</td><td>C10</td></tr>
+    <tr><td>系统管理（用户 / 角色总览 / 审计日志 / 打印模板）</td><td>●</td><td>—</td><td>—</td><td>C3 / C7 / C10</td></tr>
+  </table>
+
+  <h3>1.4 各端开发目标与完成定义（DoD）</h3>
+  <table>
+    <tr><th style="width:90px">端</th><th>开发目标</th><th>验收要点</th></tr>
+    <tr><td><b>PC Web</b></td><td>覆盖 M1-M11 全部页面与操作（见 7.2 路由表）；列表页全部满足统一查询规范；6 类打印模板可用；≥992px 完整体验、768-991 可用</td><td>v1.5 §14 里程碑 M1-M4 对应页面全部可演示；权限码控显隐、后端 Guard 生效；金额展示与 SQL 聚合一致</td></tr>
+    <tr><td><b>移动 Web</b></td><td>员工闭环：记工历史→新建报工→撤回→看状态→我的钱；审核闭环：待审列表→详情→通过/改数量/驳回；通知与单据 PDF 查看；库存只读查询</td><td>弱网断点提交不丢数据（草稿+同幂等键重试）；计件白名单不泄露价格；文案无术语（等确认/已确认/没通过）</td></tr>
+    <tr><td><b>安卓 APP</b></td><td>Capacitor 工程建立并复用 mobile 构建；SecureStorage token（30 天免登）；原生相机压缩拍照；Filesystem 草稿；启动版本检查</td><td>APK 侧载安装即用；杀进程重开免登且草稿在；拍照≤3 张自动压缩；新版本可提示整包更新</td></tr>
+  </table>
+
+  <div class="callout c-info"><b>规模假设（全部三端共用）：</b>日访问 ≤ 2000，峰值 &lt;10 QPS，用户 ≤ 100，单据 ≤ 500/天，单机 2C4G。容量设计不引入消息队列 / 缓存集群等组件。</div>
+</section>
+
+<section id="s2">
+  <h2><span class="no">2</span>技术架构与工程结构</h2>
+
+  <h3>2.1 架构总览</h3>
+  <div class="arch">
+    <div class="arow">
+      <div class="abox"><b>PC Web 管理端</b><small>Vue3 + Arco · 部署于 /</small></div>
+      <div class="abox"><b>移动端 H5</b><small>Vue3 + Vant4 · 部署于 /m</small></div>
+      <div class="abox"><b>安卓 APP</b><small>Capacitor 套壳 /m</small></div>
+      <div class="abox"><b>打印客户端</b><small>hiprint 本地服务（PC 静默打印）</small></div>
+    </div>
+    <div class="arrow-down">▼ HTTPS · REST JSON · JWT Bearer · 金额数量一律字符串</div>
+    <div class="arow"><div class="abox wide"><b>Nginx</b>　TLS 终结 · 静态资源（/ → pc，/m → mobile，/uploads）· 反代 /api → Node · 访问日志 30 天</div></div>
+    <div class="arow">
+      <div class="abox wide nest"><b>NestJS 单体（PM2 双实例 :3000/:3001）</b>
+        <span class="inner">C1 db</span><span class="inner">C2 auth</span><span class="inner">C3 rbac</span><span class="inner">C4 error</span><span class="inner">C5 decimal</span><span class="inner">C6 幂等</span><span class="inner">C7 审计</span><span class="inner">C8 查询</span><span class="inner">C9 通知</span><span class="inner">C10 打印</span><span class="inner">C11 定时</span><span class="inner">C12 文件</span><span class="inner">logging(pino+traceId)</span><br>
+        <span class="inner">M1 base</span><span class="inner">M2 stock</span><span class="inner">M3 price</span><span class="inner">M4 purchase</span><span class="inner">M5 sales</span><span class="inner">M6 process</span><span class="inner">M7 piece</span><span class="inner">M8 bill</span><span class="inner">M9 payable</span><span class="inner">M10 report</span><span class="inner">M11 alert</span>
+      </div>
+    </div>
+    <div class="arow">
+      <div class="abox"><b>PostgreSQL 15</b><small>NUMERIC 精确小数 · 条件更新防负库存 · pg_dump 每日备份</small></div>
+      <div class="abox"><b>本地文件存储</b><small>uploads/{企业代号}/ 报工照片/产品图</small></div>
+      <div class="abox"><b>日志文件</b><small>pino 按天切割 · error 独立文件</small></div>
+    </div>
+  </div>
+
+  <h3>2.2 技术栈</h3>
+  <table>
+    <tr><th style="width:130px">层</th><th style="width:240px">选型</th><th>要点</th></tr>
+    <tr><td>后端</td><td>NestJS 10 + TypeScript + Prisma</td><td>模块化单体；ValidationPipe 全局；@nestjs/swagger 自动文档（/api/docs 仅供内网）</td></tr>
+    <tr><td>数据库</td><td>PostgreSQL 15</td><td>NUMERIC(14,2/14,4/14,3)；事务；条件更新防负库存；advisory lock 防定时双跑</td></tr>
+    <tr><td>PC 前端</td><td>Vue3 + Arco Design Vue</td><td>密集表格开虚拟滚动；hiprint 打印</td></tr>
+    <tr><td>移动端</td><td>Vue3 + Vant4 + Capacitor 6</td><td>H5 与 APP 同代码，共用 REST API 与 JWT</td></tr>
+    <tr><td>打印</td><td>vue-plugin-hiprint</td><td>模板 JSON 存库，可视化设计器维护；PDF 用 puppeteer 单例生成</td></tr>
+    <tr><td>任务</td><td>@nestjs/schedule</td><td>每小时预警扫描 cron（幂等不重发）</td></tr>
+    <tr><td>日志</td><td>pino + pino-roll</td><td>JSON 行格式、按天切割、错误独立文件、traceId 贯穿（见第 6 节）</td></tr>
+    <tr><td>部署</td><td>Nginx + PM2（2 实例）+ Docker Compose</td><td>pg_dump 每日备份，保留 7/30 天</td></tr>
+  </table>
+
+  <h3 id="s2-3">2.3 monorepo 工程结构</h3>
+<pre><code>erp/                                  # pnpm monorepo（pnpm-workspace.yaml）
+├─ apps/
+│  ├─ api/                            # NestJS 单体（:3000，PM2 双实例）
+│  │  └─ src/
+│  │     ├─ main.ts                   # 引导：全局前缀 /api/v1 + ValidationPipe + Swagger
+│  │     ├─ infra/                    # C1-C12 基础组件（横切，与业务无关）
+│  │     │  ├─ db/                    # C1  PrismaClient 工厂 + withTransaction
+│  │     │  ├─ auth/                  # C2  JWT 策略 / 登录锁定 / must_change_password 拦截
+│  │     │  ├─ rbac/                  # C3  @RequirePermissions 装饰器 + 全局 Guard
+│  │     │  ├─ error/                 # C4  全局 ExceptionFilter + BizError（第 5 节）
+│  │     │  ├─ decimal/               # C5  Decimal 封装 + 字符串序列化 Interceptor
+│  │     │  ├─ idempotency/           # C6  Idempotency-Key 拦截器（第 4.4 节）
+│  │     │  ├─ audit/                 # C7  @Audit 切面（第 6.5 节）
+│  │     │  ├─ query/                 # C8  列表查询构造器（白名单/分页/合计行/导出）
+│  │     │  ├─ notify/                # C9  emit() + 应用内 emitter
+│  │     │  ├─ print/                 # C10 模板渲染 + puppeteer PDF 单例
+│  │     │  ├─ schedule/              # C11 cron + pg advisory lock
+│  │     │  ├─ file/                  # C12 上传校验 / 静态服务 / 预留 S3
+│  │     │  └─ logging/               # pino + traceId 中间件（第 6 节）
+│  │     ├─ modules/                  # M1-M11 业务模块（每模块 controller/service/repository）
+│  │     │  ├─ base/ ├─ stock/ ├─ price/ ├─ purchase/ ├─ sales/
+│  │     │  ├─ process/ ├─ piece/ ├─ bill/ ├─ payable/ ├─ report/ └─ alert/
+│  │     └─ prisma/                   # schema.prisma + migrations/（唯一迁移源，进 Git）
+│  ├─ pc/                             # PC Web（Vite + Vue3 + Arco，构建产物部署 /）
+│  │  └─ src/views/{dashboard,base,stock,purchase,sales,process,piece,bill,report,system}/...
+│  └─ mobile/                         # 移动端（Vite + Vue3 + Vant4，构建产物部署 /m）
+│     ├─ src/views/{login,report-history,report-new,wage,audit,notifications,docs,stock-query}/...
+│     └─ android/                     # Capacitor 工程（npx cap add android → APK）
+└─ packages/
+   └─ shared/                         # ★ 三端 + 后端共用（并发开发的锚点）
+      ├─ types/                       # 契约 interface（moveStock/getPrice/...）+ API DTO 类型
+      ├─ permissions/                 # 权限码常量 + 角色映射（前后端同源）
+      ├─ error-codes/                 # 错误码枚举与文案（第 5.2 节）
+      └─ mocks/                       # 契约 mock 实现</code></pre>
+  <ul>
+    <li>模块边界用 ESLint <code>no-restricted-imports</code> 强制：<code>modules/*</code> 之间禁止深层 import，只允许对方 <code>index.ts</code> 导出的契约 service</li>
+    <li>金额 lint 禁令：DTO / response 禁止 <code>number</code> 类型承载金额数量（C5 提供 ESLint 规则）</li>
+    <li>数据库迁移只允许从 <code>apps/api</code> 发出（单一迁移源，避免并行改表冲突）</li>
+  </ul>
+
+  <h3>2.4 模块间契约（回顾，签名以《并行开发计划》第 4 节为准）</h3>
+  <table>
+    <tr><th>契约</th><th style="width:100px">提供方</th><th>消费方</th><th>签名要点</th></tr>
+    <tr><td><code>moveStock(tx, moves, ctx)</code></td><td>M2 stock</td><td>M4/M5/M6/M7</td><td>唯一库存入口；条件更新防负库存（失败抛 1301 整体回滚）；返回 balance_after</td></tr>
+    <tr><td><code>getPrice(tx, args)</code></td><td>M3 price</td><td>M5</td><td>专属&gt;等级&gt;标准兜底；返回快照 {price, priceBase, priceSource}</td></tr>
+    <tr><td><code>getVirtualWarehouseId(tx, employeeId)</code></td><td>M1 base</td><td>M6/M7</td><td>不存在则同事务创建员工虚拟仓</td></tr>
+    <tr><td><code>emit(tx, {userId, type, ...})</code></td><td>C9 notify</td><td>M7/M8/M11</td><td>应用内通知，渠道 emitter 可插拔</td></tr>
+    <tr><td><code>updateAvgCost(tx, {materialId, inQty, inUnitPrice})</code></td><td>M2 stock</td><td>M4</td><td>移动加权平均，Decimal 精确，采购事务内调用</td></tr>
+  </table>
+
+  <h3 id="s2-5">2.5 环境与部署</h3>
+  <table>
+    <tr><th style="width:110px">环境</th><th>组成</th><th>说明</th></tr>
+    <tr><td>本地 dev</td><td>docker-compose：pg:15(:5432) + api(node:20, 热重载 :3000) + pc/mobile(vite :5173/:5174)</td><td><code>pnpm dev</code> 一键起；种子数据脚本 <code>pnpm seed</code></td></tr>
+    <tr><td>预发 staging</td><td>同生产拓扑，独立 PG 实例</td><td>联调 / UAT / 失败注入（事务原子性验证）</td></tr>
+    <tr><td>生产 prod</td><td>2C4G 单机：Nginx(443 TLS) → PM2(:3000/:3001) → PG(:5432)；uploads 本地磁盘</td><td>健康检查 <code>GET /health</code>；备份见 9.6</td></tr>
+  </table>
+  <h4>.env 键清单（只存后端，git 忽略，提交 .env.example 模板）</h4>
+<pre><code>DATABASE_URL=postgresql://erp:***@localhost:5432/erp
+JWT_SECRET=***            # accessToken 签名（≥32 字节随机）
+JWT_REFRESH_SECRET=***    # refreshToken 签名（与上不同）
+ACCESS_TOKEN_TTL=2h       REFRESH_TOKEN_TTL=30d
+PORT=3000  UPLOAD_DIR=./uploads  MAX_UPLOAD_MB=3
+LOGIN_RATE_LIMIT=5/min    CRON_ALERT=0 0 * * * *   # 每小时整点预警扫描
+TENANT_CODE=default       # 多租户预留：文件分桶目录名</code></pre>
+  <p>Nginx 路由：<code>/</code> → pc 静态；<code>/m</code> → mobile 静态；<code>/api</code> → Node 上游轮询；<code>/uploads</code> → 静态目录（禁执行权限）。CORS 白名单：仅同域（PC 与 H5 同源部署，无需跨域）。</p>
+
+  <h3>2.6 分支与 CI</h3>
+  <ul>
+    <li>main 保护；每泳道 <code>feature/*</code> 分支；契约文件（<code>packages/shared</code>）改动走 PR + 双泳道评审</li>
+    <li>PR 必过：ESLint（模块边界 + 金额 number 禁令）+ jest 单测 + <code>prisma migrate diff</code> 检查（防漏迁移）</li>
+    <li>集成顺序（每步可演示）：登录+RBAC → 基础数据+库存 → 采购→销售→打印 → 配送→报工→移动端 → 账单→应付→报表→预警</li>
+  </ul>
+</section>
+<section id="s3">
+  <h2><span class="no">3</span>数据库字段设计（字段级）</h2>
+  <div class="callout c-info"><b>通用约定：</b>主键 <code>BIGSERIAL</code>；所有表默认含 <code>created_at / updated_at TIMESTAMPTZ NOT NULL DEFAULT now()</code>（通用约定列，下文仅在有特殊语义时列出）；需要并发编辑的档案带乐观锁列 <code>version INT NOT NULL DEFAULT 1</code>（更新时 version+1，不匹配报 1304）；删除一律用 <code>status=0</code> 停用，不物理删除。精度：金额 <code>NUMERIC(14,2)</code> / 单价 <code>NUMERIC(14,4)</code> / 数量 <code>NUMERIC(14,3)</code>，禁 float/double。表名 / 字段名 snake_case。以下字段定义与 v1.5 第 4 节 DDL 一一同构（Prisma schema 同构生成）。</div>
+
+  <h3>3.1 认证与账号</h3>
+  <h4>users（账号）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>login_name</td><td>VARCHAR(50)</td><td>NOT NULL UNIQUE</td><td>登录名，管理员建号时指定</td></tr>
+    <tr><td>password_hash</td><td>VARCHAR(100)</td><td>NOT NULL</td><td>bcrypt(cost≥10)；初始密码为 6 位数字的哈希</td></tr>
+    <tr><td>display_name</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>显示姓名</td></tr>
+    <tr><td>employee_id</td><td>BIGINT</td><td>NULL</td><td>关联 employees.id；worker 角色必填（报工归属与数据隔离依据）</td></tr>
+    <tr><td>status</td><td>SMALLINT</td><td>NOT NULL DEFAULT 1</td><td>1=启用 0=停用；停用不可登录，历史单据保留</td></tr>
+    <tr><td>must_change_password</td><td>BOOLEAN</td><td>NOT NULL DEFAULT TRUE</td><td>首登/重置后=TRUE；改密成功置 FALSE；TRUE 时拦截一切业务接口（错误码 1103）</td></tr>
+    <tr><td>token_version</td><td>INT</td><td>NOT NULL DEFAULT 0</td><td>改密/重置 +1；JWT payload 携带 tv，与库值不等即判 1101 失效</td></tr>
+    <tr><td>failed_attempts</td><td>SMALLINT</td><td>NOT NULL DEFAULT 0</td><td>连续登录失败计数；成功登录清零</td></tr>
+    <tr><td>locked_until</td><td>TIMESTAMPTZ</td><td>NULL</td><td>failed_attempts≥5 时置 now()+15min；到期自动可再试</td></tr>
+  </table>
+  <h4>user_roles（角色分配；角色定义写死在代码常量，仅分配关系入库）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>user_id</td><td>BIGINT</td><td>PK 联合 / NOT NULL</td><td>→ users.id</td></tr>
+    <tr><td>role_code</td><td>VARCHAR(30)</td><td>PK 联合 / NOT NULL</td><td>super_admin / sys_admin / warehouse / purchase / sales / auditor / finance / worker；多角色权限取并集</td></tr>
+  </table>
+
+  <h3>3.2 基础数据（M1）</h3>
+  <h4>employees（员工档案）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>name</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>员工姓名</td></tr>
+    <tr><td>worker_type</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>local 本地 / remote 外地；决定计件工价取值（piece_rates 匹配维度）</td></tr>
+    <tr><td>tags</td><td>TEXT[]</td><td>NOT NULL DEFAULT '{}'</td><td>标签数组，如 {'外发组'}；用于计件产品可见范围（scope_type=tag）</td></tr>
+    <tr><td>address</td><td>VARCHAR(200)</td><td>NULL</td><td>加工地址（配送单打印要素）</td></tr>
+    <tr><td>phone</td><td>VARCHAR(20)</td><td>NULL</td><td>联系电话</td></tr>
+    <tr><td>status / version</td><td>SMALLINT / INT</td><td>DEFAULT 1</td><td>1=启用 0=停用；乐观锁</td></tr>
+  </table>
+  <h4>suppliers（供应商）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>code</td><td>VARCHAR(30)</td><td>NOT NULL UNIQUE</td><td>供应商编码</td></tr>
+    <tr><td>name</td><td>VARCHAR(100)</td><td>NOT NULL</td><td>供应商名称</td></tr>
+    <tr><td>contact / phone / address / remark</td><td>VARCHAR</td><td>NULL</td><td>联系人 / 电话 / 地址 / 备注</td></tr>
+    <tr><td>credit_days</td><td>SMALLINT</td><td>NOT NULL DEFAULT 30</td><td>账期天数（应付参考展示）</td></tr>
+    <tr><td>opening_balance</td><td>NUMERIC(14,2)</td><td>NOT NULL DEFAULT 0</td><td>期初应付欠款；应付余额 = 期初 + 采购确认额 − 付款核销额 − 退货冲抵</td></tr>
+    <tr><td>status / version</td><td>SMALLINT / INT</td><td>DEFAULT 1</td><td>停用不删；乐观锁</td></tr>
+  </table>
+  <h4>material_categories（分类树）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>parent_id</td><td>BIGINT</td><td>NULL</td><td>父分类；NULL=根节点；两级为限</td></tr>
+    <tr><td>name</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>分类名称</td></tr>
+    <tr><td>sort</td><td>INT</td><td>DEFAULT 0</td><td>排序号</td></tr>
+  </table>
+  <h4>materials（物料档案；必填仅 5 项：编码/名称/分类/类型/单位）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>code</td><td>VARCHAR(50)</td><td>NOT NULL UNIQUE</td><td>物料编码，如 FP-1001 / SP-2003</td></tr>
+    <tr><td>name</td><td>VARCHAR(100)</td><td>NOT NULL</td><td>物料名称</td></tr>
+    <tr><td>category_id</td><td>BIGINT</td><td>NULL（页面必选）</td><td>→ material_categories.id</td></tr>
+    <tr><td>type</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>raw 原料 / semi 半成品 / finished 成品</td></tr>
+    <tr><td>unit</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>基本单位（件）；库存 / 报工 / 换算均以基本单位为准</td></tr>
+    <tr><td>model / spec / brand / color / mfrs</td><td>VARCHAR</td><td>NULL（选填）</td><td>型号 / 规格（3寸/孔距96）/ 品牌 / 颜色 / 厂家；录入页"必填在上、选填折叠"</td></tr>
+    <tr><td>weight</td><td>NUMERIC(10,3)</td><td>NULL</td><td>单件重量 kg（选填）</td></tr>
+    <tr><td>barcode</td><td>VARCHAR(50)</td><td>NULL</td><td>条码（拣货扫码核对）</td></tr>
+    <tr><td>min_unit_qty</td><td>NUMERIC(14,3)</td><td>NULL</td><td><b>已废弃</b>（改用 material_packages），保留列不写入</td></tr>
+    <tr><td>piece_enabled</td><td>BOOLEAN</td><td>NOT NULL DEFAULT FALSE</td><td>启用计件；TRUE 才能配置 piece_rates 与 piece_material_scope</td></tr>
+    <tr><td>output_material_id</td><td>BIGINT</td><td>NULL</td><td>加工产出映射：semi→finished；NULL=纯计件不动库存；审核通过时触发 员工仓−N → 成品仓+N</td></tr>
+    <tr><td>last_purchase_price</td><td>NUMERIC(14,4)</td><td>NULL</td><td>最近采购价（采购确认时更新，仅参考展示）</td></tr>
+    <tr><td>avg_cost</td><td>NUMERIC(14,4)</td><td>NOT NULL DEFAULT 0</td><td>移动加权平均成本；采购入库同事务更新（updateAvgCost 契约）；期初导入可录入；出库成本快照来源</td></tr>
+    <tr><td>image_url</td><td>VARCHAR(300)</td><td>NULL</td><td>产品图（移动端报工选品展示）</td></tr>
+    <tr><td>ext_props</td><td>JSONB</td><td>NULL</td><td>扩展属性（预留）</td></tr>
+    <tr><td>remark</td><td>VARCHAR(500)</td><td>NULL</td><td>备注</td></tr>
+    <tr><td>status / version</td><td>SMALLINT / INT</td><td>DEFAULT 1</td><td>停用后不可再选，历史单据保留；乐观锁</td></tr>
+  </table>
+  <h4>material_packages（包装单元：成品 件/袋/箱）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>material_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ materials.id</td></tr>
+    <tr><td>name</td><td>VARCHAR(20)</td><td>NOT NULL，UNIQUE(material_id,name)</td><td>包装名（件=基础 / 袋 / 箱）</td></tr>
+    <tr><td>base_qty</td><td>NUMERIC(14,3)</td><td>NOT NULL CHECK (base_qty&gt;0)</td><td>换算基础单位数量，如 1袋=100件；下单 qty 落包装数，base_qty=qty×换算 落库存</td></tr>
+    <tr><td>is_default</td><td>BOOLEAN</td><td>NOT NULL DEFAULT FALSE</td><td>下单默认包装；同一物料至多一个 TRUE（应用层保证）</td></tr>
+    <tr><td>status</td><td>SMALLINT</td><td>DEFAULT 1</td><td>1=启用 0=停用</td></tr>
+  </table>
+  <h4>warehouses（仓库；员工虚拟仓一对一自动创建）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>code</td><td>VARCHAR(30)</td><td>NOT NULL UNIQUE</td><td>仓库编码；虚拟仓自动生成（如 VW-E0008）</td></tr>
+    <tr><td>name</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>仓库名称（如 成品一仓 / [虚拟]王五）</td></tr>
+    <tr><td>type</td><td>VARCHAR(15)</td><td>NOT NULL</td><td>real 实体仓 / employee_virtual 员工虚拟仓</td></tr>
+    <tr><td>employee_id</td><td>BIGINT</td><td>NULL UNIQUE</td><td>虚拟仓必填且一对一（=员工在制量仓位）；实体仓为 NULL</td></tr>
+    <tr><td>keeper / address / remark</td><td>VARCHAR</td><td>NULL</td><td>负责人 / 地址 / 备注（选填）</td></tr>
+    <tr><td>status</td><td>SMALLINT</td><td>DEFAULT 1</td><td>虚拟仓不提供停用入口（随员工）</td></tr>
+  </table>
+  <h4>customers（客户）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>code / name</td><td>VARCHAR</td><td>code NOT NULL UNIQUE</td><td>客户编码 / 名称</td></tr>
+    <tr><td>level</td><td>VARCHAR(2)</td><td>NOT NULL</td><td>A / B / C 客户等级（等级计价与账期预警分级维度）</td></tr>
+    <tr><td>price_mode</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>discount 折扣模式 / min_unit 最小单元价模式（详见 3.3）</td></tr>
+    <tr><td>discount</td><td>NUMERIC(5,4)</td><td>NULL</td><td>如 0.9500=95折；price_mode=discount 时生效（乘标准价）</td></tr>
+    <tr><td>credit_days</td><td>SMALLINT</td><td>NOT NULL DEFAULT 30</td><td>账期天数；账单 due_date 与预警计算依据</td></tr>
+    <tr><td>opening_balance</td><td>NUMERIC(14,2)</td><td>NOT NULL DEFAULT 0</td><td>期初欠款；首期账单自动并入（bill_items 标记 source=opening）</td></tr>
+    <tr><td>status / version</td><td>SMALLINT / INT</td><td>DEFAULT 1</td><td>停用不删；乐观锁</td></tr>
+  </table>
+
+  <h3>3.3 价格规则（M3）</h3>
+  <h4>price_rules（取价优先级：客户专属 &gt; 等级 &gt; 标准兜底）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>material_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ materials.id</td></tr>
+    <tr><td>customer_id</td><td>BIGINT</td><td>NULL</td><td>NULL=按等级通用；非 NULL=客户专属价（priority 最高）</td></tr>
+    <tr><td>level</td><td>VARCHAR(2)</td><td>NULL</td><td>A / B / C；customer_id 与 level 二选一（专属规则 level 为空）</td></tr>
+    <tr><td>min_unit_price</td><td>NUMERIC(14,4)</td><td>NULL</td><td>件价（元/件）；min_unit 模式取此价，整包价 = 件价×包装换算量（过程中不取整）</td></tr>
+    <tr><td>discount</td><td>NUMERIC(5,4)</td><td>NULL</td><td>discount 模式乘标准价（标准价=min_unit_price 或标准规则）</td></tr>
+    <tr><td>priority</td><td>SMALLINT</td><td>NOT NULL</td><td>1 客户专属 / 2 等级 / 3 标准兜底；引擎按此排序取第一条生效规则</td></tr>
+    <tr><td>effective_from</td><td>DATE</td><td>NOT NULL DEFAULT current_date</td><td>生效起日（含）；与 biz_date 比较</td></tr>
+    <tr><td>effective_to</td><td>DATE</td><td>NULL</td><td>生效止日（含）；NULL=长期</td></tr>
+    <tr><td>status</td><td>SMALLINT</td><td>DEFAULT 1</td><td>1=启用 0=停用</td></tr>
+  </table>
+
+  <h3>3.4 库存核心（M2）</h3>
+  <h4>stock（库存余量）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>warehouse_id</td><td>BIGINT</td><td>PK 联合 / NOT NULL</td><td>→ warehouses.id（含虚拟仓）</td></tr>
+    <tr><td>material_id</td><td>BIGINT</td><td>PK 联合 / NOT NULL</td><td>→ materials.id</td></tr>
+    <tr><td>qty</td><td>NUMERIC(14,3)</td><td>NOT NULL DEFAULT 0 CHECK (qty&gt;=0)</td><td>基础单位数量；出库走条件更新 <code>AND qty&gt;=n</code>，0 行更新即触发 1301 回滚</td></tr>
+  </table>
+  <h4>stock_ledger（库存流水；学 ERPNext 结余式）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id</td><td>BIGSERIAL</td><td>PK</td><td>自增主键</td></tr>
+    <tr><td>biz_type</td><td>VARCHAR(20)</td><td>NOT NULL</td><td>见 3.12 枚举：purchase_in / sales_out / sales_return_in / purchase_return_out / transfer / process_issue / process_finish / adjust / opening（本篇补充明确期初类型）</td></tr>
+    <tr><td>biz_no</td><td>VARCHAR(40)</td><td>NOT NULL</td><td>关联单据号（可溯源）；红冲反向流水 biz_no = 原单号 + ':void'（如 SO20261015001:void）</td></tr>
+    <tr><td>warehouse_id / material_id</td><td>BIGINT</td><td>NOT NULL</td><td>仓位 / 物料</td></tr>
+    <tr><td>qty_change</td><td>NUMERIC(14,3)</td><td>NOT NULL</td><td>正=入库 负=出库（基础单位）</td></tr>
+    <tr><td>balance_after</td><td>NUMERIC(14,3)</td><td>NOT NULL</td><td>本笔后结余（行锁内计算写入，供流水页直接显示）</td></tr>
+    <tr><td>operator_id</td><td>BIGINT</td><td>NOT NULL</td><td>操作人 → users.id</td></tr>
+    <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>NOT NULL DEFAULT now()</td><td>流水时间（非业务时间；业务时间看单据 biz_date）</td></tr>
+  </table>
+
+  <h3>3.5 销售单据（M5）</h3>
+  <h4>sales_orders（销售订单）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id / no</td><td>BIGSERIAL / VARCHAR(40)</td><td>no NOT NULL UNIQUE</td><td>单号规则 <code>SO+yyyyMMdd+3位流水</code>，如 SO20261015001</td></tr>
+    <tr><td>customer_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ customers.id</td></tr>
+    <tr><td>status</td><td>VARCHAR(15)</td><td>NOT NULL DEFAULT 'draft'</td><td>draft → confirmed → picking → shipped → settled/closed；作废仅 draft；ship_delay 为预警计算展示态不落库</td></tr>
+    <tr><td>total_amount</td><td>NUMERIC(14,2)</td><td>NOT NULL DEFAULT 0</td><td>= SUM(行 amount)；保存时服务端重算，不信任前端</td></tr>
+    <tr><td>biz_date</td><td>DATE</td><td>NOT NULL DEFAULT current_date</td><td>业务时间（可改，限 7 天内）；三时间规范之一</td></tr>
+    <tr><td>promise_ship_date</td><td>DATE</td><td>NULL</td><td>承诺发货日；发货超期预警依据</td></tr>
+    <tr><td>remark</td><td>VARCHAR(500)</td><td>NULL</td><td>备注</td></tr>
+    <tr><td>creator_id / version</td><td>BIGINT / INT</td><td>NOT NULL / DEFAULT 1</td><td>创建人；乐观锁（draft 编辑用）</td></tr>
+  </table>
+  <h4>sales_order_items（销售明细行；计价与成本快照落在此行）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>id / order_id</td><td>BIGSERIAL / BIGINT</td><td>order_id NOT NULL</td><td>→ sales_orders.id</td></tr>
+    <tr><td>material_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ materials.id</td></tr>
+    <tr><td>package_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ material_packages.id；行上快照 package.name / base_qty</td></tr>
+    <tr><td>qty</td><td>NUMERIC(14,3)</td><td>NOT NULL CHECK (qty&gt;0)</td><td>按包装的下单数量（如 5袋）</td></tr>
+    <tr><td>base_qty</td><td>NUMERIC(14,3)</td><td>NOT NULL</td><td>基础单位数量 = qty×包装换算（500件）；库存联动唯一口径</td></tr>
+    <tr><td>price</td><td>NUMERIC(14,4)</td><td>NOT NULL</td><td>单价（元/所选包装，如 元/袋）</td></tr>
+    <tr><td>price_base</td><td>NUMERIC(14,4)</td><td>NULL</td><td>参考件价（元/件，仅展示防混淆）</td></tr>
+    <tr><td>discount</td><td>NUMERIC(5,4)</td><td>NULL</td><td>行折扣（客户 discount 模式时快照）</td></tr>
+    <tr><td>amount</td><td>NUMERIC(14,2)</td><td>NOT NULL</td><td>= round(round(price×qty,2)×discount,2)；只在最终一步取整（ROUND_HALF_UP）</td></tr>
+    <tr><td>cost_unit</td><td>NUMERIC(14,4)</td><td>NULL</td><td>出库时成本快照（元/基础单位 = 当时 materials.avg_cost）；拣货出库事务内写入</td></tr>
+    <tr><td>cost_amount</td><td>NUMERIC(14,2)</td><td>NOT NULL DEFAULT 0</td><td>= cost_unit×base_qty（毛利报表数据源）</td></tr>
+    <tr><td>price_source</td><td>VARCHAR(15)</td><td>NOT NULL</td><td>exclusive 专属 / level 等级 / fallback 标准兜底 / manual 改价（需权限+审计）</td></tr>
+  </table>
+  <h4>sales_returns / sales_return_items（销售退货 = 红字反向单）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th>说明（与销售单的差异）</th></tr>
+    <tr><td>主表差异</td><td>no 前缀 SR；增加 <code>original_order_id BIGINT NOT NULL</code>（引用原销售单）；status 仅 confirmed（创建即生效）；biz_date 限 7 天内可改</td></tr>
+    <tr><td>明细差异</td><td>增加 <code>original_item_id BIGINT NOT NULL</code>（引用原行）；qty ≤ 原行可退余量（应用层校验）；<b>单价 / 折扣取原行快照不可改</b>；产生反向库存流水（sales_return_in）与成本冲回（cost_amount 取原行快照）</td></tr>
+  </table>
+
+  <h3>3.6 采购与付款（M4 / M9）</h3>
+  <h4>purchase_orders / purchase_order_items（采购入库；结构同销售单，差异如下）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th>说明（与销售单的差异）</th></tr>
+    <tr><td>supplier_id</td><td>NOT NULL，替代 customer_id → suppliers.id</td></tr>
+    <tr><td>status</td><td>draft → confirmed（确认即入库：moveStock + updateAvgCost 同事务）；无 picking/shipped</td></tr>
+    <tr><td>明细行</td><td>无包装概念（qty 即基础单位数量）；<code>unit_price NUMERIC(14,4)</code> 采购单价（元/基础单位）；无 price_source/discount/cost_* 列</td></tr>
+    <tr><td>paid_amount</td><td>NUMERIC(14,2) NOT NULL DEFAULT 0；由 payment_refs 核销联动更新</td></tr>
+    <tr><td>pay_status</td><td>VARCHAR(10) NOT NULL DEFAULT 'unpaid'；unpaid / partial / paid（核销额联动）</td></tr>
+  </table>
+  <h4>purchase_returns（采购退货 = 红字反向单）</h4>
+  <p>同 sales_returns 模式：引用 <code>original_order_id / original_item_id</code>，单价取原行快照；确认即 <b>冲库存（purchase_return_out）+ 冲应付 + 成本冲回</b>（同事务）。</p>
+  <h4>payment_records（供应商付款） / payment_refs（付款↔采购单核销，一付多单）</h4>
+  <table>
+    <tr><th style="width:160px">字段</th><th style="width:140px">类型</th><th>说明</th></tr>
+    <tr><td>no</td><td>VARCHAR(40) UNIQUE</td><td>单号 PM+yyyyMMdd+3位流水</td></tr>
+    <tr><td>supplier_id / amount / method / paid_at / operator_id / remark</td><td>—</td><td>method：cash / bank / wechat / alipay / other（本篇明确枚举）；paid_at 业务日期</td></tr>
+    <tr><td>payment_refs.amount</td><td>NUMERIC(14,2)</td><td>核销到某采购单的金额；SUM(核销) ≤ 采购单未付额；PK(payment_id, purchase_order_id)</td></tr>
+  </table>
+
+  <h3>3.7 配送发料（M6）</h3>
+  <h4>delivery_notes / delivery_note_items（配送单）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>no</td><td>VARCHAR(40)</td><td>NOT NULL UNIQUE</td><td>单号 DN+yyyyMMdd+3位流水</td></tr>
+    <tr><td>employee_id</td><td>BIGINT</td><td>NOT NULL</td><td>收料员工 → employees.id（打印含姓名/地址）</td></tr>
+    <tr><td>biz_date</td><td>DATE</td><td>NOT NULL DEFAULT current_date</td><td>业务时间</td></tr>
+    <tr><td>status</td><td>VARCHAR(12)</td><td>NOT NULL</td><td>created 已建 / issued 已发料 / received 已签收</td></tr>
+    <tr><td>items.material_id / qty</td><td>BIGINT / NUMERIC(14,3)</td><td>NOT NULL / CHECK (qty&gt;0)</td><td>发料明细（基础单位数量）；确认发料 = 实体仓 −N → 员工虚拟仓 +N（transfer 流水两笔，biz_no=DN 单号）</td></tr>
+  </table>
+
+  <h3>3.8 报工与计件（M7）</h3>
+  <h4>piece_rates（工价表）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>material_id</td><td>BIGINT</td><td>NOT NULL</td><td>计件产品（materials.piece_enabled=TRUE）</td></tr>
+    <tr><td>worker_type</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>local / remote——本地与外地差异工价</td></tr>
+    <tr><td>unit_price</td><td>NUMERIC(14,4)</td><td>NOT NULL</td><td>计件单价（元/件）</td></tr>
+    <tr><td>effective_from / effective_to</td><td>DATE</td><td>NOT NULL / NULL</td><td>生效区间；报工时点取生效价快照</td></tr>
+  </table>
+  <h4>piece_material_scope（计件产品白名单；不指定=无人可见，防价格泄露）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>material_id</td><td>BIGINT</td><td>NOT NULL，UNIQUE 三联</td><td>→ materials.id</td></tr>
+    <tr><td>scope_type</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>employee 指定账号 / tag 按员工标签</td></tr>
+    <tr><td>scope_value</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>employee 时= employees.id 字符串；tag 时=标签名（如 外发组）；UNIQUE(material_id, scope_type, scope_value)</td></tr>
+  </table>
+  <h4>work_reports（报工单；员工自主多行提交）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>no</td><td>VARCHAR(40)</td><td>NOT NULL UNIQUE</td><td>单号 WR+yyyyMMdd+3位流水</td></tr>
+    <tr><td>employee_id</td><td>BIGINT</td><td>NOT NULL</td><td>报工资归（service 层从登录态强制注入，防越权）</td></tr>
+    <tr><td>biz_date</td><td>DATE</td><td>NOT NULL DEFAULT current_date</td><td>业务时间（可补报昨天；工资归集按此字段）</td></tr>
+    <tr><td>status</td><td>VARCHAR(12)</td><td>NOT NULL</td><td>submitted / approved / rejected / voided</td></tr>
+    <tr><td>total_amount</td><td>NUMERIC(14,2)</td><td>NOT NULL DEFAULT 0</td><td>= SUM(行 amount)；审核改数量后同事务重算</td></tr>
+    <tr><td>photos</td><td>JSONB</td><td>NULL</td><td>照片 URL 数组（≤3 张，C12 上传）</td></tr>
+    <tr><td>remark</td><td>VARCHAR(500)</td><td>NULL</td><td>员工备注</td></tr>
+    <tr><td>submitted_at</td><td>TIMESTAMPTZ</td><td>NOT NULL DEFAULT now()</td><td>环节时间（不可改）</td></tr>
+    <tr><td>auditor_id / audited_at</td><td>BIGINT / TIMESTAMPTZ</td><td>NULL</td><td>审核人 / 审核时间</td></tr>
+    <tr><td>reject_reason</td><td>VARCHAR(200)</td><td>NULL</td><td>驳回原因（大白话，必填）；驳回后员工可改后重新提交（回 submitted 由新建单实现——原单终态 rejected）</td></tr>
+    <tr><td>void_reason / voided_by / voided_at</td><td>—</td><td>NULL</td><td>作废红冲：原因必填；单事务回滚库存+工钱，明细行置 voided</td></tr>
+  </table>
+  <h4>work_report_items（报工明细行 = 计件账本）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>report_id / material_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ work_reports.id / materials.id（白名单内产品）</td></tr>
+    <tr><td>qty</td><td>NUMERIC(14,3)</td><td>NOT NULL CHECK (qty&gt;0)</td><td>员工提交数</td></tr>
+    <tr><td>confirmed_qty</td><td>NUMERIC(14,3)</td><td>NULL</td><td>审核确认数（默认=qty，≤qty）；改数量时 adjust_reason 必填</td></tr>
+    <tr><td>unit_price</td><td>NUMERIC(14,4)</td><td>NOT NULL</td><td>提交时点"我的工价"快照；审核不可改</td></tr>
+    <tr><td>amount</td><td>NUMERIC(14,2)</td><td>NOT NULL</td><td>= round(confirmed_qty×unit_price, 2)</td></tr>
+    <tr><td>adjust_reason</td><td>VARCHAR(200)</td><td>NULL</td><td>改数量原因（审计）</td></tr>
+    <tr><td>status</td><td>VARCHAR(10)</td><td>NOT NULL DEFAULT 'active'</td><td>active / voided（随单作废红冲）</td></tr>
+    <tr><td>settlement_id</td><td>BIGINT</td><td>NULL ★</td><td><b>已结算标记（预提核心）</b>：NULL=预提中（approved 未结算）；非 NULL=被某 wage_settlements.id 锁定；结算锁定用条件更新 <code>WHERE settlement_id IS NULL AND status='active'</code>，行数不符整批回滚</td></tr>
+  </table>
+
+  <h3>3.9 工资结算（M7；预提 → 月结/日期圈选 → 打单 → 确认）</h3>
+  <h4>wage_settlement_batches（批量结算批次；一次给多员工结算）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>no</td><td>VARCHAR(40)</td><td>NOT NULL UNIQUE</td><td>单号 WSB+yyyyMM-3位流水，如 WSB202610-001</td></tr>
+    <tr><td>period</td><td>CHAR(7)</td><td>NULL</td><td>月度圈选 '2026-10'（与下行二选一）</td></tr>
+    <tr><td>date_from / date_to</td><td>DATE</td><td>NULL</td><td>或日期范围圈选；均按明细 biz_date 归集；<b>月度与日期范围可重叠不冲突</b>（明细只被首个结算锁定）</td></tr>
+    <tr><td>settle_date</td><td>DATE</td><td>NOT NULL</td><td>统一指定的结算日期（打单确认时填写/修改）</td></tr>
+    <tr><td>employee_count</td><td>INT</td><td>NOT NULL</td><td>批次内员工结算单数</td></tr>
+    <tr><td>total_amount</td><td>NUMERIC(14,2)</td><td>NOT NULL</td><td>= SUM(批次内各员工结算单金额)</td></tr>
+    <tr><td>status</td><td>VARCHAR(12)</td><td>NOT NULL DEFAULT 'draft'</td><td>draft / settled / voided（作废=全部子单同事务红冲）</td></tr>
+    <tr><td>creator_id / created_at</td><td>—</td><td>NOT NULL</td><td>创建人 / 时间</td></tr>
+    <tr><td>confirmed_by / confirmed_at</td><td>—</td><td>NULL</td><td>确认人 / 时间（打单核对后确认）</td></tr>
+    <tr><td>void_reason / voided_by / voided_at</td><td>—</td><td>NULL</td><td>作废红冲（明细回预提，可重新结算）</td></tr>
+  </table>
+  <h4>wage_settlements（员工工资结算单；每员工每期间一张）</h4>
+  <table>
+    <tr><th style="width:150px">字段</th><th style="width:130px">类型</th><th style="width:190px">约束 / 默认</th><th>说明</th></tr>
+    <tr><td>no</td><td>VARCHAR(40)</td><td>NOT NULL UNIQUE</td><td>单号 WS+yyyyMM-3位流水，如 WS202610-001</td></tr>
+    <tr><td>batch_id</td><td>BIGINT</td><td>NOT NULL</td><td>→ wage_settlement_batches.id（单个结算也进批次，employee_count=1）</td></tr>
+    <tr><td>employee_id</td><td>BIGINT</td><td>NOT NULL</td><td>结算员工</td></tr>
+    <tr><td>period</td><td>CHAR(7)</td><td>NOT NULL</td><td>结算期间 '2026-10'（按 biz_date 归集口径展示；日期圈选批次自动推算所属月）</td></tr>
+    <tr><td>total_amount</td><td>NUMERIC(14,2)</td><td>NOT NULL</td><td>= 锁定明细合计（生成时点快照，不再变动）</td></tr>
+    <tr><td>settle_date</td><td>DATE</td><td>NOT NULL</td><td>指定结算日期（如 11-15 发 10 月工资；确认时可改）</td></tr>
+    <tr><td>status</td><td>VARCHAR(12)</td><td>NOT NULL DEFAULT 'draft'</td><td>draft 锁定待确认 / settled 已结算 / voided</td></tr>
+    <tr><td>remark / creator_id / confirmed_by / confirmed_at / void_* </td><td>—</td><td>同批次</td><td>同批次字段语义</td></tr>
+  </table>
+  <div class="callout c-warn"><b>三层防重复结算（v1.5 冻结）：</b>① 明细级：条件更新 settlement_id，更新行数与预期不符整批回滚 ② 单据级：员工已结算期间预提余额为 0 时拒绝再生成 ③ 批次级：Idempotency-Key 幂等键防连点重放。作废 = 红冲（明细 settlement_id 置回 NULL，恢复预提，可重新结算）。</div>
+
+  <h3>3.10 账单与支撑（M8 / M11 / C7 / C10）</h3>
+  <h4>bills / bill_items / receipts（月度账单与收款）</h4>
+  <table>
+    <tr><th style="width:160px">字段</th><th style="width:140px">类型</th><th>说明</th></tr>
+    <tr><td>bills.no</td><td>VARCHAR(40) UNIQUE</td><td>单号 BL+yyyyMM+客户码，如 BL202610-C0012</td></tr>
+    <tr><td>bills.customer_id / period</td><td>BIGINT / CHAR(7)</td><td>客户 + 账期月；生成幂等（★UNIQUE(customer_id, period) 兜底，见 3.11）</td></tr>
+    <tr><td>bills.total_amount / paid_amount</td><td>NUMERIC(14,2)</td><td>账单总额 = SUM(销售单 confirmed 额)（首期并入 opening_balance）；已收累计</td></tr>
+    <tr><td>bills.due_date / status</td><td>DATE / VARCHAR(12)</td><td>到期日（期间末+credit_days）；confirmed → partial_paid → settled；overdue 由预警计算不落库</td></tr>
+    <tr><td>bill_items</td><td>—</td><td>PK(bill_id, sales_order_id)；amount 销售单金额；首期含 source=opening 的期初欠款行</td></tr>
+    <tr><td>receipts</td><td>—</td><td>bill_id / amount / method（同付款枚举）/ received_at / operator_id；累计收款 ≤ total_amount（超额报 1306）</td></tr>
+  </table>
+  <h4>alert_records（预警）/ notifications（应用内通知）</h4>
+  <table>
+    <tr><th style="width:160px">字段</th><th style="width:140px">类型</th><th>说明</th></tr>
+    <tr><td>alert_records.type</td><td>VARCHAR(15)</td><td>bill_due 到期前 3 天 / bill_overdue 逾期 1/7/15 天 / ship_delay 发货超期</td></tr>
+    <tr><td>alert_records.level</td><td>SMALLINT</td><td>1 提示 / 2 警告 / 3 严重（逾期天数映射）</td></tr>
+    <tr><td>alert_records.ref_id / title / handled / handled_by</td><td>—</td><td>指向单据 id（bills.id / sales_orders.id）；标题；是否已处理；处理人</td></tr>
+    <tr><td>notifications.user_id / type</td><td>BIGINT / VARCHAR(20)</td><td>接收人；type：audit_result / report_rejected / bill_due / ship_delay / account</td></tr>
+    <tr><td>notifications.title / content</td><td>VARCHAR</td><td>标题 ≤200 / 内容 ≤500</td></tr>
+    <tr><td>notifications.ref_type / ref_id</td><td>VARCHAR(20) / BIGINT</td><td>点击穿透目标（如 work_report / 3001）</td></tr>
+    <tr><td>notifications.is_read</td><td>BOOLEAN</td><td>未读数 = COUNT(user_id, is_read=false)；H5 登录后 30s 轮询</td></tr>
+  </table>
+  <h4>print_templates / audit_logs / idempotency_records（支撑）</h4>
+  <table>
+    <tr><th style="width:160px">字段</th><th style="width:140px">类型</th><th>说明</th></tr>
+    <tr><td>print_templates.code / name</td><td>VARCHAR UNIQUE / VARCHAR</td><td>模板 code：pick_list / duplicate_note / delivery_note / wage_slip / wage_settlement_summary / bill_statement（第 8 节）</td></tr>
+    <tr><td>print_templates.hiprint_json / version</td><td>JSONB / INT</td><td>hiprint 模板 JSON；每次保存自动 +version</td></tr>
+    <tr><td>audit_logs.user_id / action / resource / resource_id</td><td>—</td><td>操作人 / 动作码（6.5 节清单）/ 资源 / 资源 id</td></tr>
+    <tr><td>audit_logs.before_json / after_json / ip</td><td>JSONB / INET</td><td>变更前后快照（敏感字段脱敏）；来源 IP</td></tr>
+    <tr><td>idempotency_records.key</td><td>VARCHAR(64) PK</td><td>前端提交的 UUID；status processing / done；response_json 缓存原响应</td></tr>
+    <tr><td>idempotency_records.user_id / endpoint</td><td>—</td><td>归属用户与端点（同键不同用户拒绝复用）；创建 24h 后清理</td></tr>
+  </table>
+
+  <h3 id="s3-11">3.11 索引与约束汇总（★=本篇补充，迁移评审确认）</h3>
+  <table>
+    <tr><th style="width:200px">对象</th><th style="width:110px">类别</th><th>说明</th></tr>
+    <tr><td>users.login_name；materials.code；suppliers.code；warehouses.code；customers.code</td><td>UNIQUE</td><td>档案编码唯一</td></tr>
+    <tr><td>各单据 no（SO/SR/PO/DN/WR/WSB/WS/PM/BL）</td><td>UNIQUE</td><td>单号唯一</td></tr>
+    <tr><td>warehouses.employee_id</td><td>UNIQUE</td><td>虚拟仓一对一</td></tr>
+    <tr><td>material_packages(material_id, name)</td><td>UNIQUE</td><td>同物料包装名唯一</td></tr>
+    <tr><td>piece_material_scope(material_id, scope_type, scope_value)</td><td>UNIQUE</td><td>白名单去重</td></tr>
+    <tr><td>stock</td><td>PK + CHECK</td><td>PK(warehouse_id, material_id)；CHECK qty≥0</td></tr>
+    <tr><td>stock_ledger(warehouse_id, material_id, created_at)</td><td>INDEX</td><td>流水页主查询路径</td></tr>
+    <tr><td>★ stock_ledger(biz_no)</td><td>INDEX</td><td>按单据反查全部流水（详情页"库存影响"）</td></tr>
+    <tr><td>★ work_report_items(settlement_id)</td><td>INDEX</td><td>结算单/批次反查明细；预提余额聚合 WHERE settlement_id IS NULL</td></tr>
+    <tr><td>★ work_report_items(material_id, status)</td><td>INDEX</td><td>计件报表按物料聚合</td></tr>
+    <tr><td>★ wage_settlements(batch_id)</td><td>INDEX</td><td>批次详情 / 汇总清单打印数据源</td></tr>
+    <tr><td>★ sales_orders(customer_id, biz_date)；sales_orders(status, created_at)</td><td>INDEX</td><td>客户维度报表 / 待办列表</td></tr>
+    <tr><td>★ bills(customer_id, period)</td><td>UNIQUE</td><td>账单生成幂等的 DB 兜底（并发生成只成功一张）</td></tr>
+    <tr><td>★ notifications(user_id, is_read, created_at)</td><td>INDEX</td><td>未读数 30s 轮询</td></tr>
+    <tr><td>★ audit_logs(created_at)；audit_logs(user_id, created_at)</td><td>INDEX</td><td>日志查询页</td></tr>
+    <tr><td>★ idempotency_records(created_at)</td><td>INDEX</td><td>24h 过期清理扫描</td></tr>
+    <tr><td>★ piece_rates(material_id, worker_type, effective_from)</td><td>INDEX</td><td>取价快照查询</td></tr>
+    <tr><td>purchase_orders(supplier_id, pay_status)</td><td>INDEX</td><td>应付聚合（v1.5 已有）</td></tr>
+    <tr><td>work_report_items(report_id)；wage_settlements(employee_id, period)</td><td>INDEX</td><td>v1.5 已有</td></tr>
+  </table>
+
+  <h3 id="s3-12">3.12 枚举值字典（全库）</h3>
+  <table>
+    <tr><th style="width:210px">字段</th><th style="width:300px">取值</th><th>含义</th></tr>
+    <tr><td>users.status</td><td>1 / 0</td><td>启用 / 停用</td></tr>
+    <tr><td>user_roles.role_code</td><td>super_admin / sys_admin / warehouse / purchase / sales / auditor / finance / worker</td><td>八角色，权限取并集（矩阵见 v1.5 §5.2）</td></tr>
+    <tr><td>employees.worker_type</td><td>local / remote</td><td>本地 / 外地（差异工价）</td></tr>
+    <tr><td>materials.type</td><td>raw / semi / finished</td><td>原料 / 半成品 / 成品</td></tr>
+    <tr><td>warehouses.type</td><td>real / employee_virtual</td><td>实体仓 / 员工虚拟仓</td></tr>
+    <tr><td>customers.level</td><td>A / B / C</td><td>客户等级</td></tr>
+    <tr><td>customers.price_mode</td><td>discount / min_unit</td><td>折扣模式（乘标准价）/ 最小单元价模式（件价×包装换算）</td></tr>
+    <tr><td>price_rules.priority</td><td>1 / 2 / 3</td><td>客户专属 / 等级 / 标准兜底</td></tr>
+    <tr><td>stock_ledger.biz_type</td><td>purchase_in / sales_out / sales_return_in / purchase_return_out / transfer / process_issue / process_finish / adjust / opening★</td><td>采购入库 / 销售出库 / 销售退入 / 采购退出 / 调拨（含发料与完工两段各两笔）/ 调整 / 期初</td></tr>
+    <tr><td>sales_orders.status</td><td>draft / confirmed / picking / shipped / settled / closed</td><td>草稿→已确认→拣货中→已发货→已结算/关闭；ship_delay 为预警展示态</td></tr>
+    <tr><td>purchase_orders.status / pay_status</td><td>draft / confirmed；unpaid / partial / paid</td><td>确认即入库 / 付款状态</td></tr>
+    <tr><td>sales_order_items.price_source</td><td>exclusive / level / fallback / manual</td><td>专属价 / 等级价 / 标准价 / 手工改价（权限+审计）</td></tr>
+    <tr><td>delivery_notes.status</td><td>created / issued / received</td><td>已建 / 已发料 / 已签收</td></tr>
+    <tr><td>work_reports.status</td><td>submitted / approved / rejected / voided</td><td>待审核 / 已确认 / 没通过 / 已作废</td></tr>
+    <tr><td>work_report_items.status</td><td>active / voided</td><td>有效 / 随单作废</td></tr>
+    <tr><td>wage_settlements / batches.status</td><td>draft / settled / voided</td><td>锁定待确认 / 已结算 / 已作废（红冲回预提）</td></tr>
+    <tr><td>bills.status</td><td>confirmed / partial_paid / settled</td><td>overdue 由预警计算不落库</td></tr>
+    <tr><td>payment / receipt .method</td><td>cash / bank / wechat / alipay / other★</td><td>现金 / 转账 / 微信 / 支付宝 / 其他（本篇明确枚举）</td></tr>
+    <tr><td>alert_records.type / level</td><td>bill_due / bill_overdue / ship_delay；1 / 2 / 3</td><td>预警类型 / 级别</td></tr>
+    <tr><td>notifications.type</td><td>audit_result / report_rejected / bill_due / ship_delay / account</td><td>通知类型（点击穿透 ref_type+ref_id）</td></tr>
+    <tr><td>idempotency_records.status</td><td>processing / done</td><td>处理中（返回 1302）/ 已完成（返回原响应）</td></tr>
+  </table>
+</section>
+<section id="s4">
+  <h2><span class="no">4</span>API 规范</h2>
+
+  <h3>4.1 统一约定（三端共用）</h3>
+  <table>
+    <tr><th style="width:130px">项</th><th>规范</th></tr>
+    <tr><td>Base URL</td><td><code>/api/v1</code>（PC、H5、APP 同一地址；Nginx 反代到 Node）</td></tr>
+    <tr><td>认证</td><td><code>Authorization: Bearer &lt;accessToken&gt;</code>；accessToken 2h（内存持有）；refreshToken 30d（Web=httpOnly Cookie，APP=SecureStorage）；<code>POST /auth/refresh</code> 静默续期</td></tr>
+    <tr><td>金额 / 数量</td><td>JSON 一律<b>字符串</b>：<code>{"amount":"1234.50"}</code>；前端仅展示时 format</td></tr>
+    <tr><td>时间</td><td>日期 <code>YYYY-MM-DD</code>（biz_date）；时间戳 ISO 8601 UTC（<code>2026-10-15T09:30:00Z</code>），前端本地化展示</td></tr>
+    <tr><td>分页</td><td><code>?page=1&amp;pageSize=20</code>（pageSize 上限 100）；响应 <code>{list, total, page, pageSize, sum?}</code>；sum=全量合计行（SQL 单独 SUM）</td></tr>
+    <tr><td>排序 / 筛选</td><td><code>?sort=created_at:desc</code>；排序与筛选字段走后端<b>白名单</b>，白名单外报 1003</td></tr>
+    <tr><td>幂等</td><td>所有创建类 POST 必带 <code>Idempotency-Key: &lt;uuid&gt;</code> 头（前端每次提交生成）；重复键返回原单据（详见 4.4）</td></tr>
+    <tr><td>响应包装</td><td>成功 <code>{"code":0,"message":"ok","data":{...},"traceId":"t-..."}</code>；失败见第 5 节</td></tr>
+    <tr><td>限流</td><td><code>/auth/login</code> 5 次/分/IP（超限 1104）；其余接口不限流（内网规模）</td></tr>
+  </table>
+
+  <h3 id="s4-2">4.2 全量接口清单</h3>
+  <p>权限码以 v1.5 §5.2 矩阵为准；★=本篇补充明确（矩阵未覆盖，第 10 节汇总待评审）。标 <span class="tag t-purple">幂等</span> 的 POST 必带 Idempotency-Key。</p>
+
+  <h4>认证 / 账号（C2）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>POST</td><td>/auth/login</td><td>公开（限流 5次/分）<span class="tag t-purple">幂等</span></td><td>body {loginName, password}；返回 accessToken + user + mustChangePassword；Set-Cookie refreshToken</td></tr>
+    <tr><td>POST</td><td>/auth/refresh</td><td>refreshToken</td><td>静默续期 accessToken；token_version 不符返回 1101</td></tr>
+    <tr><td>POST</td><td>/auth/logout</td><td>登录即可</td><td>清 Cookie / 清 APP SecureStorage</td></tr>
+    <tr><td>GET</td><td>/auth/profile</td><td>登录即可</td><td>当前用户 + 角色 + 权限码集合（前端路由与按钮显隐生成）</td></tr>
+    <tr><td>PUT</td><td>/auth/password</td><td>登录即可</td><td>{oldPassword, newPassword}；成功 token_version+1（旧 token 全失效），前端跳登录；新密码 ≥8 位不限复杂度</td></tr>
+  </table>
+
+  <h4>系统管理（sys_admin）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET / POST</td><td>/users</td><td>system:user:view / create</td><td>建号：登录名+姓名+角色+关联员工（worker 必填）；返回<b>一次性展示的 6 位数字初始密码</b><span class="tag t-purple">幂等</span></td></tr>
+    <tr><td>PUT</td><td>/users/:id</td><td>system:user:edit</td><td>改姓名/角色/状态/员工关联；乐观锁 version</td></tr>
+    <tr><td>POST</td><td>/users/:id/reset-password</td><td>system:user:reset-password★</td><td>重置为 6 位数字初始密码（二次确认）；must_change_password=TRUE；token_version+1；审计</td></tr>
+    <tr><td>GET</td><td>/audit-logs</td><td>system:log:view</td><td>操作日志查询（action/userId/时间筛选，见 6.5）</td></tr>
+    <tr><td>GET / PUT</td><td>/print/templates/:code</td><td>print:template:view / edit</td><td>hiprint 模板 JSON 维护；保存自动 +version</td></tr>
+    <tr><td>GET</td><td>/app/version?platform=android</td><td>公开</td><td>★APP 启动检查：{versionCode, versionName, downloadUrl, forceUpdate}</td></tr>
+  </table>
+
+  <h4>基础数据（M1；★权限码本篇补充明确）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET / POST / PUT</td><td>/material-categories</td><td>base:material:*★</td><td>分类树维护（两级为限）</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/materials</td><td>base:material:*★</td><td>物料档案；必填 5 项（编码/名称/分类/类型/单位）；PUT 携带 version 乐观锁<span class="tag t-purple">幂等</span></td></tr>
+    <tr><td>GET</td><td>/materials/:id</td><td>base:material:view / stock:query</td><td>详情抽屉：各仓分布 + 近期流水 + 各等级价</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/materials/:id/packages</td><td>base:material:edit★</td><td>包装单元维护（件/袋/箱 + base_qty 换算 + 默认包装）</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/materials/:id/piece-scope</td><td>base:material:edit★</td><td>计件可见范围编辑（选员工 / 选标签）</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/warehouses</td><td>base:warehouse:*★</td><td>实体仓维护；虚拟仓自动创建不可手动建</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/customers</td><td>base:customer:*（sales）</td><td>客户档案：等级/计价模式/折扣/账期/期初欠款</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/suppliers</td><td>base:supplier:*（purchase）</td><td>供应商档案：账期/期初应付</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/employees</td><td>base:employee:*★</td><td>员工档案：本地/外地、标签、地址（打印）、电话</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/piece-rates</td><td>base:employee:edit★</td><td>工价表维护（物料 × local/remote × 生效区间）</td></tr>
+    <tr><td>GET / POST / PUT</td><td>/price-rules</td><td>price:rule:*★（建议 sys_admin）</td><td>价格规则维护（专属/等级/标准，双模式）</td></tr>
+    <tr><td>POST</td><td>/price-rules/preview</td><td>sales:order:create</td><td>开单行取价预览（客户+物料+包装+日期 → 快照对象）</td></tr>
+  </table>
+
+  <h4>库存（M2）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET</td><td>/stock?groupBy=detail|warehouse|material</td><td>stock:query</td><td>库存总览三视图 + sum 合计行；/stock/export 导出 Excel（≤1万行）</td></tr>
+    <tr><td>GET</td><td>/stock/ledger</td><td>stock:query</td><td>流水查询：仓库+物料+bizType+bizNo+时间；显示 balance_after 结余列</td></tr>
+    <tr><td>POST</td><td>/stock/transfers</td><td>stock:transfer:create<span class="tag t-purple">幂等</span></td><td>调拨：{fromWarehouseId, toWarehouseId, items[{materialId, qty}], remark}；即时完成，两笔流水</td></tr>
+    <tr><td>POST</td><td>/stock/adjustments</td><td>stock:adjust:create<span class="tag t-purple">幂等</span></td><td>调整（盈亏）：{warehouseId, items[{materialId, qtyChange, reason}]}；reason 必填；审计</td></tr>
+    <tr><td>POST</td><td>/stock/opening</td><td>stock:opening:create<span class="tag t-purple">幂等</span></td><td>期初库存导入（仅系统启用初期开放）；biz_type=opening；可同时录 avg_cost</td></tr>
+  </table>
+
+  <h4>采购与付款（M4 / M9）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET / POST</td><td>/purchase/orders</td><td>purchase:in:view / create</td><td>采购单；POST <span class="tag t-purple">幂等</span>；明细 {materialId, qty, unitPrice}</td></tr>
+    <tr><td>POST</td><td>/purchase/orders/:id/confirm</td><td>purchase:in:confirm</td><td>确认入库：moveStock + updateAvgCost 同事务；返回新 avg_cost</td></tr>
+    <tr><td>POST</td><td>/purchase/returns</td><td>purchase:return:create<span class="tag t-purple">幂等</span></td><td>红字退货：引用原单行 {originalOrderId, items[{originalItemId, qty}]}；冲库存+冲应付+成本冲回</td></tr>
+    <tr><td>GET / POST</td><td>/payments</td><td>payment:create（purchase/finance）</td><td>付款登记 <span class="tag t-purple">幂等</span>；一付多单核销 {supplierId, amount, method, paidAt, refs[{purchaseOrderId, amount}]}</td></tr>
+    <tr><td>GET</td><td>/report/payable?supplierId=</td><td>report:payable:view</td><td>应付报表（期初+采购−付款−退货，SQL 实时聚合）</td></tr>
+  </table>
+
+  <h4>销售（M5）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET / POST</td><td>/sales/orders</td><td>sales:order:view / create</td><td>POST <span class="tag t-purple">幂等</span>；明细 {materialId, packageId, qty, price?}；计价引擎自动填充快照（price 传值=改价，需 sales:order:editPrice + 审计）</td></tr>
+    <tr><td>GET / PUT</td><td>/sales/orders/:id</td><td>sales:order:view / edit</td><td>详情 / draft 编辑（乐观锁）；biz_date 改限 7 天内</td></tr>
+    <tr><td>POST</td><td>/sales/orders/:id/confirm</td><td>sales:order:confirm</td><td>锁定价格快照，进入可拣货状态</td></tr>
+    <tr><td>POST</td><td>/sales/orders/:id/void</td><td>sales:order:void</td><td>作废（仅 draft）</td></tr>
+    <tr><td>POST</td><td>/picking/:orderId/execute</td><td>picking:execute</td><td>拣货出库：事务内条件扣减 + cost 快照 + 状态 shipped</td></tr>
+    <tr><td>GET</td><td>/print/pick-list/:orderId</td><td>picking:print</td><td>拣货单打印数据（模板 pick_list）</td></tr>
+    <tr><td>GET</td><td>/print/duplicate-note/:orderId</td><td>print:note:print</td><td>二联客户单打印数据（模板 duplicate_note）</td></tr>
+    <tr><td>POST</td><td>/sales/returns</td><td>sales:return:create<span class="tag t-purple">幂等</span></td><td>销售退货红字：引用原单行；单价取原行快照；反向流水+成本冲回</td></tr>
+  </table>
+
+  <h4>配送发料（M6；★权限码本篇补充明确，建议 warehouse）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET / POST</td><td>/delivery-notes</td><td>process:task:view / create★</td><td>配送单（发料管理）<span class="tag t-purple">幂等</span>；{employeeId, bizDate, items[{materialId, qty}], remark}</td></tr>
+    <tr><td>POST</td><td>/delivery-notes/:id/issue</td><td>process:task:issue★</td><td>确认发料：实体仓→员工虚拟仓 moveStock；打印配送单</td></tr>
+    <tr><td>POST</td><td>/delivery-notes/:id/receive</td><td>process:task:issue★</td><td>签收确认（员工可 H5 确认或仓管代确认）</td></tr>
+    <tr><td>GET</td><td>/print/delivery-note/:id</td><td>process:task:view</td><td>配送单打印数据（含员工地址、签收栏）</td></tr>
+  </table>
+
+  <h4>报工与审核（M7；员工端核心）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET</td><td>/piece/my/materials</td><td>piece:my:report</td><td>我可报工的产品（白名单过滤 + 按我的常用排序 + 产品图 + <b>仅含我的工价</b>）</td></tr>
+    <tr><td>POST</td><td>/piece/reports</td><td>piece:my:report<span class="tag t-purple">幂等</span></td><td>提交报工：{bizDate, items[{materialId, qty}], photos[≤3], remark}；工价快照服务端写入</td></tr>
+    <tr><td>GET</td><td>/piece/my/reports?page=</td><td>piece:my:query</td><td>报工历史（倒序；状态人话映射：等确认/已确认/没通过）</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/withdraw</td><td>piece:my:withdraw</td><td>审核前自行撤回（回草稿重新编辑）；仅本人</td></tr>
+    <tr><td>GET</td><td>/piece/reports?status=submitted</td><td>process:task:view（审核）/ piece:report:view（查询）</td><td>报工列表（审核人默认 submitted 过滤）</td></tr>
+    <tr><td>GET</td><td>/piece/reports/:id</td><td>同上</td><td>详情含照片放大、行明细、我的工价</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/approve</td><td>process:audit:confirm</td><td>整单审核 {items:[{itemId, confirmedQty?, adjustReason?}]}；confirmedQty&lt;qty 时原因必填；单事务：库存联动+计件入账+通知+审计</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/reject</td><td>process:audit:reject</td><td>驳回 {reason}（大白话意见必填）；通知员工</td></tr>
+    <tr><td>POST</td><td>/piece/reports/:id/void</td><td>piece:void</td><td>作废红冲（原因必填）：成品仓−N→员工仓+N、明细 voided、工钱聚合自愈</td></tr>
+    <tr><td>GET</td><td>/piece/my/summary?month=</td><td>piece:my:query</td><td>本人当月工钱：accrued 预提 / settled 已结 分开 + 明细</td></tr>
+    <tr><td>GET</td><td>/piece/report?groupBy=employee|material|month</td><td>piece:report:view</td><td>计件统计（含员工×月矩阵）+ /export</td></tr>
+  </table>
+
+  <h4>工资结算（M7；财务核心）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>GET</td><td>/wage/accrued?employeeId=&amp;month=</td><td>wage:settle:create</td><td>预提工资余额（员工/全员实时聚合：approved 且 settlement_id 为空）</td></tr>
+    <tr><td>POST</td><td>/wage/settlements</td><td>wage:settle:create<span class="tag t-purple">幂等</span></td><td>单个员工结算单：{employeeId, period | dateFrom+dateTo}</td></tr>
+    <tr><td>POST</td><td>/wage/settlements/batch</td><td>wage:settle:create<span class="tag t-purple">幂等</span></td><td><b>批量结算</b>：{employeeIds[] | all, period | dateFrom+dateTo}；一个事务生成批次 + N 张员工结算单；三层防重复</td></tr>
+    <tr><td>GET</td><td>/wage/settlements?status=&amp;period=</td><td>wage:settle:create</td><td>结算单列表（含批次维度筛选）</td></tr>
+    <tr><td>GET</td><td>/wage/settlements/:id</td><td>wage:settle:create</td><td>个人结算单详情（wage_slip 打印数据源：全部明细记录）</td></tr>
+    <tr><td>GET</td><td>/wage/settlements/batches/:id</td><td>wage:settle:create</td><td>批次详情：所有员工结算单 + <b>全部明细记录</b>（wage_settlement_summary 汇总清单数据源）</td></tr>
+    <tr><td>POST</td><td>/wage/settlements/:id/confirm</td><td>wage:settle:confirm</td><td>确认结算 {settleDate}（打单核对后再确认；settleDate 可改）</td></tr>
+    <tr><td>POST</td><td>/wage/settlements/batches/:id/confirm</td><td>wage:settle:confirm★</td><td>批量确认：同事务逐单确认（任一失败整体回滚），统一 settleDate</td></tr>
+    <tr><td>POST</td><td>/wage/settlements/:id/void</td><td>wage:settle:void</td><td>作废红冲（原因必填）：明细回预提，可重新结算</td></tr>
+    <tr><td>GET</td><td>/print/wage-slip/:id<br>/print/wage-summary/:batchId</td><td>wage:settle:print★</td><td>个人工资单 / 批量汇总清单打印数据（第 8 节）</td></tr>
+  </table>
+
+  <h4>账单 / 预警 / 通知 / 报表 / 文件（M8 / M11 / C9 / M10 / C12）</h4>
+  <table>
+    <tr><th style="width:60px">方法</th><th style="width:290px">路径</th><th style="width:190px">权限码</th><th>说明</th></tr>
+    <tr><td>POST</td><td>/bills/generate</td><td>bill:create<span class="tag t-purple">幂等</span></td><td>按期生成 {period}；幂等（重复生成返回已有）；首期并入客户期初欠款</td></tr>
+    <tr><td>GET</td><td>/bills?customerId=&amp;period=&amp;status=</td><td>bill:view★</td><td>账单列表 + sum 合计</td></tr>
+    <tr><td>GET</td><td>/bills/:id</td><td>bill:view★</td><td>账单明细（穿透销售订单；首期含 opening 行）</td></tr>
+    <tr><td>POST</td><td>/receipts</td><td>receipt:create<span class="tag t-purple">幂等</span></td><td>收款 {billId, amount, method, receivedAt}；累计不可超额（1306）</td></tr>
+    <tr><td>GET</td><td>/alerts?type=&amp;handled=</td><td>alert:view★（finance/sales）</td><td>预警中心列表</td></tr>
+    <tr><td>POST</td><td>/alerts/:id/handle</td><td>alert:handle</td><td>处理预警 {remark}</td></tr>
+    <tr><td>GET</td><td>/notifications?unread=1</td><td>登录即可</td><td>通知列表（30s 轮询角标用 ?unread=1&amp;pageSize=0 只取 count）</td></tr>
+    <tr><td>POST</td><td>/notifications/:id/read；/notifications/read-all</td><td>登录即可</td><td>标记已读</td></tr>
+    <tr><td>GET</td><td>/report/sales?groupBy=customer|month|material</td><td>report:sales:view</td><td>销售报表（销售额/退货净额）+ /export</td></tr>
+    <tr><td>GET</td><td>/report/gross-margin?month=&amp;customerId=</td><td>report:sales:view</td><td>毛利报表：销售额−出库成本−计件工钱</td></tr>
+    <tr><td>POST</td><td>/files/upload</td><td>登录即可</td><td>图片上传（jpg/png/webp ≤3MB；返回 {url}；路径穿越防护）</td></tr>
+    <tr><td>GET</td><td>/docs/pdf/:type/:id</td><td>按单据权限</td><td>★移动端 PDF：puppeteer 单例生成拣货/配送/账单 PDF</td></tr>
+  </table>
+
+  <h3 id="s4-3">4.3 关键接口请求 / 响应示例</h3>
+  <p>以下示例覆盖：登录改密、物料与包装、库存查询调拨、采购、销售出库退货、配送、报工审核、批量结算、账单收款、报表。金额数量全部字符串。</p>
+
+  <h4>a) 登录：POST /auth/login</h4>
+<pre><code>// Request
+{ "loginName": "zhang3", "password": "123456" }
+
+// Response 200（Set-Cookie: refresh_token=...; HttpOnly; Secure; SameSite=Strict）
+{ "code": 0, "message": "ok", "traceId": "t-8f3a1c2d4e5f",
+  "data": { "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "user": { "id": 101, "displayName": "张销售", "roles": ["sales"],
+      "permissions": ["base:customer:*", "sales:order:*", "sales:order:editPrice",
+                      "sales:return:create", "picking:print", "print:note:print", "stock:query"],
+      "mustChangePassword": false } } }
+
+// Response 403（失败第 5 次）
+{ "code": 1401, "message": "账号已锁定，请 15 分钟后重试", "traceId": "t-..." }</code></pre>
+
+  <h4>b) 改密：PUT /auth/password</h4>
+<pre><code>// Request（首登强制改密或主动改密；自设密码 ≥8 位，不限纯数字/纯字母）
+{ "oldPassword": "123456", "newPassword": "zhang3202610" }
+
+// Response 200 —— token_version+1，旧 token 全部失效，前端跳登录
+{ "code": 0, "message": "ok", "data": null, "traceId": "t-..." }
+
+// Response 400
+{ "code": 1402, "message": "旧密码不正确", "traceId": "t-..." }</code></pre>
+
+  <h4>c) 新建物料（含包装）：POST /materials</h4>
+<pre><code>// Request
+{ "code": "FP-1001", "name": "合页 3寸（镀镍）", "categoryId": 5, "type": "finished",
+  "unit": "件", "spec": "3寸/孔距96", "barcode": "6901234567890",
+  "pieceEnabled": false,
+  "packages": [
+    { "name": "件", "baseQty": "1", "isDefault": true },
+    { "name": "袋", "baseQty": "100" },
+    { "name": "箱", "baseQty": "1200" } ] }
+
+// Response 200
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "id": 1001, "code": "FP-1001", "version": 1,
+    "packages": [ { "id": 34, "name": "件", "baseQty": "1.000", "isDefault": true },
+                  { "id": 35, "name": "袋", "baseQty": "100.000" },
+                  { "id": 36, "name": "箱", "baseQty": "1200.000" } ] } }</code></pre>
+
+  <h4>d) 库存总览：GET /stock?groupBy=detail&amp;keyword=合页</h4>
+<pre><code>// Response 200（sum 为 SQL 单独聚合的全量合计行，非当前页累加）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "page": 1, "pageSize": 20, "total": 2,
+    "list": [
+      { "warehouseId": 1, "warehouseName": "成品一仓", "materialCode": "FP-1001",
+        "materialName": "合页 3寸（镀镍）", "qty": "12500.000",
+        "avgCost": "0.4120", "costAmount": "5150.00" },
+      { "warehouseId": 2, "warehouseName": "成品二仓", "materialCode": "FP-1001",
+        "materialName": "合页 3寸（镀镍）", "qty": "3300.000",
+        "avgCost": "0.4120", "costAmount": "1359.60" } ],
+    "sum": { "qty": "15800.000", "costAmount": "6509.60" } } }</code></pre>
+
+  <h4>e) 调拨：POST /stock/transfers</h4>
+<pre><code>// Request（Idempotency-Key: 7f2c...）
+{ "fromWarehouseId": 1, "toWarehouseId": 2,
+  "items": [ { "materialId": 1001, "qty": "500.000" } ], "remark": "调拨至二仓" }
+
+// Response 200
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "id": 7, "no": "TR20261015001", "status": "done",
+    "ledgerCount": 2 } }   // 两笔流水：出 500 / 入 500，balance_after 各自返回
+
+// Response 422（库存不足，条件更新 0 行命中）
+{ "code": 1301, "message": "库存不足：成品一仓 - 合页 3寸（镀镍）", "traceId": "t-..." }</code></pre>
+
+  <h4>f) 采购入库：POST /purchase/orders → confirm</h4>
+<pre><code>// POST /purchase/orders（Idempotency-Key: a91b...）
+{ "supplierId": 3, "bizDate": "2026-10-15",
+  "items": [ { "materialId": 1001, "qty": "12000.000", "unitPrice": "0.4000" } ],
+  "remark": "10月补货" }
+// → data: { "id": 501, "no": "PO20261015001", "status": "draft", "totalAmount": "4800.00" }
+
+// POST /purchase/orders/501/confirm（确认即入库）
+// → data: { "status": "confirmed", "avgCost": "0.4120", "ledgerCount": 1,
+//           "lastPurchasePrice": "0.4000" }
+// 新均价 = (旧量×旧均价 + 入量×采购价)/(旧量+入量)，Decimal 精确、同事务</code></pre>
+
+  <h4>g) 销售订单（包装计价）：POST /sales/orders</h4>
+<pre><code>// Request（Idempotency-Key: c3d4...；price 不传=自动取价，传值=改价需权限）
+{ "customerId": 12, "bizDate": "2026-10-15", "promiseShipDate": "2026-10-18",
+  "items": [ { "materialId": 1001, "packageId": 35, "qty": "5" } ], "remark": "" }
+
+// Response 200 —— 计价引擎快照（B 级客户，min_unit 模式，件价 0.95 → 袋价 95.00）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "id": 1001, "no": "SO20261015001", "status": "draft",
+    "totalAmount": "475.00",
+    "items": [ { "itemId": 9001, "materialCode": "FP-1001", "packageId": 35,
+      "packageName": "袋", "packageBaseQty": "100.000",
+      "qty": "5.000", "baseQty": "500.000",
+      "price": "95.0000", "priceBase": "0.9500",
+      "amount": "475.00", "priceSource": "level" } ] } }</code></pre>
+
+  <h4>h) 拣货出库：POST /picking/1001/execute</h4>
+<pre><code>// Response 200（事务：条件扣减 + cost 快照 + 状态 shipped）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "orderNo": "SO20261015001", "status": "shipped",
+    "ledgerCount": 1, "costAmount": "206.00" } }
+// 行内写入 cost_unit="0.4120"（当时 avg_cost）→ cost_amount = 0.4120×500</code></pre>
+
+  <h4>i) 销售退货：POST /sales/returns</h4>
+<pre><code>// Request（引用原单行；单价取原行快照不可传）
+{ "originalOrderId": 1001, "bizDate": "2026-10-20",
+  "items": [ { "originalItemId": 9001, "qty": "1.000" } ], "remark": "客户反馈破损" }
+// → data: { "no": "SR20261020001", "totalAmount": "95.00" }
+// 联动：反向流水 sales_return_in（biz_no="SO20261015001"）+ 成本冲回 41.20</code></pre>
+
+  <h4>j) 配送发料：POST /delivery-notes → issue</h4>
+<pre><code>// POST /delivery-notes（Idempotency-Key: e55f...）
+{ "employeeId": 8, "bizDate": "2026-10-15",
+  "items": [ { "materialId": 2003, "qty": "50000.000" } ] }
+// → data: { "id": 66, "no": "DN20261015001", "status": "created" }
+
+// POST /delivery-notes/66/issue
+// → data: { "status": "issued", "moves": [
+//   { "warehouse": "半成品仓", "qtyChange": "-50000.000" },
+//   { "warehouse": "[虚拟]王五", "qtyChange": "+50000.000" } ] }
+// 员工仓余额 = 在制量参考（后续完工审核消耗）</code></pre>
+
+  <h4>k) 员工报工：GET /piece/my/materials → POST /piece/reports</h4>
+<pre><code>// GET /piece/my/materials（白名单过滤，仅含我的工价，不泄露其他价）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "list": [ { "materialId": 2003, "name": "合页半成品 3寸",
+    "unit": "件", "image": "/uploads/default/m/2003.jpg",
+    "unitPrice": "0.0500", "recentUsed": true } ] } }
+
+// POST /piece/reports（Idempotency-Key: 弱网失败同键重试）
+{ "bizDate": "2026-10-15",
+  "items": [ { "materialId": 2003, "qty": "12000.000" } ],
+  "photos": ["/uploads/default/fp/uuid1.jpg"], "remark": "" }
+// → data: { "id": 3001, "no": "WR20261015001", "status": "submitted",
+//   "totalAmount": "600.00",
+//   "items": [ { "itemId": 7001, "qty": "12000.000", "unitPrice": "0.0500",
+//                "amount": "600.00", "confirmedQty": null } ] }</code></pre>
+
+  <h4>l) 审核（行级改数量）：POST /piece/reports/3001/approve</h4>
+<pre><code>// Request（confirmedQty 缺省=qty；小于 qty 必填 adjustReason）
+{ "items": [ { "itemId": 7001, "confirmedQty": "11800.000",
+               "adjustReason": "现场清点 11800" } ] }
+
+// Response 200（单事务：库存联动 + 计件入账 + 通知 + 审计）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "status": "approved", "totalAmount": "590.00",
+    "stockMoved": true,
+    "moves": [ { "warehouse": "[虚拟]王五", "qtyChange": "-11800.000" },
+               { "warehouse": "成品一仓", "qtyChange": "+11800.000" } ],
+    "notified": true } }
+// materials.output_material_id 未配置时 stockMoved=false（纯计件不动库存）</code></pre>
+
+  <h4>m) 我的工钱：GET /piece/my/summary?month=2026-10</h4>
+<pre><code>{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "month": "2026-10", "accrued": "2390.00", "settled": "0.00",
+    "details": [ { "reportNo": "WR20261015001", "bizDate": "2026-10-15",
+      "materialName": "合页半成品 3寸", "confirmedQty": "11800.000",
+      "unitPrice": "0.0500", "amount": "590.00", "settlementNo": null },
+      { "reportNo": "WR20261014007", "bizDate": "2026-10-14",
+        "materialName": "拉手 4寸", "confirmedQty": "35000.000",
+        "unitPrice": "0.0500", "amount": "1750.00", "settlementNo": null } ] } }</code></pre>
+
+  <h4>n) 批量结算：POST /wage/settlements/batch → 批次详情 → 确认</h4>
+<pre><code>// ① 生成批次（Idempotency-Key: f00d...；period 或 dateFrom/dateTo 二选一）
+{ "employeeIds": "all", "period": "2026-10" }
+// Response 200（一个事务：批次 + N 张员工结算单 + 明细锁定）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "batchId": 21, "no": "WSB202610-001", "status": "draft",
+    "employeeCount": 3, "totalAmount": "8750.00",
+    "settlements": [
+      { "id": 301, "no": "WS202610-001", "employeeId": 8, "employeeName": "王五",
+        "totalAmount": "2390.00", "itemCount": 6 } ] } }
+
+// ② GET /wage/settlements/batches/21（汇总清单打印数据源：列出所有记录）
+{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "no": "WSB202610-001", "period": "2026-10", "settleDate": "2026-11-15",
+    "status": "draft", "employeeCount": 3, "totalAmount": "8750.00",
+    "settlements": [
+      { "no": "WS202610-001", "employeeName": "王五", "totalAmount": "2390.00",
+        "items": [ { "reportNo": "WR20261015001", "bizDate": "2026-10-15",
+                     "materialName": "合页半成品 3寸",
+                     "confirmedQty": "11800.000", "unitPrice": "0.0500", "amount": "590.00" },
+                   { "reportNo": "WR20261014007", "bizDate": "2026-10-14",
+                     "materialName": "拉手 4寸",
+                     "confirmedQty": "35000.000", "unitPrice": "0.0500", "amount": "1750.00" } ] },
+      { "no": "WS202610-002", "employeeName": "李四", "totalAmount": "3860.00", "items": [ ... ] },
+      { "no": "WS202610-003", "employeeName": "赵六", "totalAmount": "2500.00", "items": [ ... ] } ] } }
+
+// ③ 打单核对 → 确认（单个或批量；settleDate 指定结算日期）
+POST /wage/settlements/batches/21/confirm   { "settleDate": "2026-11-15" }
+// → data: { "status": "settled", "confirmedCount": 3 }
+// 防重复：重复生成同期间 → 1307（该员工期间预提余额为 0 / 已全部结算）</code></pre>
+
+  <h4>o) 账单与收款：POST /bills/generate → POST /receipts</h4>
+<pre><code>// POST /bills/generate（Idempotency-Key: ...；重复生成返回已有账单）
+{ "period": "2026-10" }
+// → data: { "generated": 5, "bills": [ { "no": "BL202610-C0012", "customerId": 12,
+//   "totalAmount": "12875.00", "dueDate": "2026-11-29" } ],
+//   "mergedOpening": 2 }   // 首期自动并入客户期初欠款
+
+// POST /receipts
+{ "billId": 88, "amount": "5000.00", "method": "bank", "receivedAt": "2026-11-01" }
+// → data: { "receiptId": 12, "billStatus": "partial_paid", "paidAmount": "5000.00" }
+// 超额时 → { "code": 1306, "message": "收款累计不可超过账单总额", "traceId": "t-..." }</code></pre>
+
+  <h4>p) 毛利报表：GET /report/gross-margin?month=2026-10</h4>
+<pre><code>{ "code": 0, "message": "ok", "traceId": "t-...",
+  "data": { "list": [
+    { "month": "2026-10", "salesAmount": "125000.00", "returnAmount": "475.00",
+      "netSales": "124525.00", "costAmount": "61200.00", "pieceWage": "8750.00",
+      "grossMargin": "54575.00", "marginRate": "0.4381" } ] } }
+// 口径：销售额−退货−出库成本（快照）−计件工钱（approved）；全部 SQL 聚合</code></pre>
+
+  <h3 id="s4-4">4.4 幂等实现细节（C6）</h3>
+  <ol>
+    <li>前端提交前生成 UUID（<code>crypto.randomUUID()</code>），整个提交生命周期复用（含弱网重试、草稿重发）</li>
+    <li>后端 POST 拦截器：<code>idempotency_records</code> 查 key → 不存在则事务内插入 processing 记录并放行 → 已 done 则直接返回缓存的 response_json → processing 中（他人/重放）返回 <code>1302</code></li>
+    <li>业务事务提交后更新记录为 done + 缓存响应；24h 后定时清理（索引见 3.11）</li>
+    <li>兜底：DB 唯一约束（单号 / 编码 / bills(customer_id,period)）保证极端并发下也只有一单落库</li>
+    <li>同 key 不同 user_id / endpoint：视为非法，返回 1001</li>
+  </ol>
+</section>
+<section id="s5">
+  <h2><span class="no">5</span>错误处理格式</h2>
+
+  <h3>5.1 统一响应体</h3>
+<pre><code>// 成功
+{ "code": 0, "message": "ok", "data": { ... }, "traceId": "t-8f3a1c2d4e5f" }
+
+// 失败（message 直接可展示；details 仅参数校验类错误出现）
+{ "code": 1001, "message": "参数校验失败", "traceId": "t-8f3a1c2d4e5f",
+  "details": [
+    { "field": "items[0].qty", "rule": "isPositiveDecimal", "msg": "数量必须大于 0" },
+    { "field": "bizDate", "rule": "isDateString", "msg": "业务时间格式应为 YYYY-MM-DD" } ] }</code></pre>
+  <table>
+    <tr><th style="width:110px">字段</th><th style="width:100px">类型</th><th>说明</th></tr>
+    <tr><td>code</td><td>number</td><td>0=成功；非 0 见 5.2 错误码表（前后端从 shared/error-codes 同源 import）</td></tr>
+    <tr><td>message</td><td>string</td><td>可直接展示的中文文案；业务错误带上下文（如"库存不足：成品一仓 - 合页 3寸"）</td></tr>
+    <tr><td>details</td><td>array?</td><td>字段级校验明细（仅 1001/1002）；前端可逐字段标红</td></tr>
+    <tr><td>traceId</td><td>string</td><td>贯穿日志的追踪号（见第 6 节）；报障时提供此号可定位全链路日志</td></tr>
+    <tr><td>data</td><td>object?</td><td>仅成功响应携带；金额数量均为字符串</td></tr>
+  </table>
+
+  <h3>5.2 错误码总表（分段；v1.5 已有码保持不变，★=本篇补充）</h3>
+  <table>
+    <tr><th style="width:90px">code</th><th style="width:150px">含义</th><th style="width:70px">HTTP</th><th>触发场景 / 处理要点</th></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>0 成功</b></td></tr>
+    <tr><td>0</td><td>成功</td><td>200</td><td>—</td></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>1000-1099 通用请求错误</b></td></tr>
+    <tr><td>1001</td><td>参数校验失败</td><td>400</td><td>ValidationPipe 拦截；details 给字段明细；幂等键非法（同 key 不同用户/端点）也用此码</td></tr>
+    <tr><td>1002★</td><td>请求体格式错误</td><td>400</td><td>JSON 解析失败 / Content-Type 错误</td></tr>
+    <tr><td>1003★</td><td>查询字段不在白名单</td><td>400</td><td>sort / 筛选字段白名单外（C8 查询规范强制，防注入）</td></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>1100-1199 认证与会话</b></td></tr>
+    <tr><td>1101</td><td>未登录 / token 失效</td><td>401</td><td>无 token、过期、签名错、token_version 不符；前端清会话跳登录</td></tr>
+    <tr><td>1102</td><td>无权限</td><td>403</td><td>RBAC Guard 拦截（权限码缺失）；worker 越权访问他人数据也用此码</td></tr>
+    <tr><td>1103★</td><td>密码未修改（首登拦截）</td><td>403</td><td>must_change_password=TRUE 时除 /auth/password、/auth/logout 外全部拦截；前端跳强制改密页</td></tr>
+    <tr><td>1104★</td><td>请求过于频繁</td><td>429</td><td>/auth/login 限流 5 次/分/IP</td></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>1200-1299 资源</b></td></tr>
+    <tr><td>1204</td><td>资源不存在</td><td>404</td><td>id 无效 / 已清理；含 Prisma P2025 转换</td></tr>
+    <tr><td>1205★</td><td>资源已停用</td><td>404</td><td>操作目标是 status=0 的档案（物料/客户/员工等）</td></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>1300-1399 业务规则</b></td></tr>
+    <tr><td>1301</td><td>库存不足</td><td>422</td><td>条件更新 0 行命中；message 带仓库名+物料名；整体事务回滚</td></tr>
+    <tr><td>1302</td><td>幂等冲突（处理中）</td><td>409</td><td>同 key 请求正在处理；前端提示稍候并禁用按钮 3s</td></tr>
+    <tr><td>1303</td><td>单据状态不允许此操作</td><td>422</td><td>如非 draft 改单、重复确认、已结算再作废路径错等</td></tr>
+    <tr><td>1304★</td><td>数据已被他人修改（乐观锁）</td><td>409</td><td>version 不匹配；前端弹"请刷新后重试"并重拉数据</td></tr>
+    <tr><td>1305★</td><td>数据重复（唯一约束）</td><td>409</td><td>编码/单号/包装名等唯一冲突（Prisma P2002 转换）；message 指明字段</td></tr>
+    <tr><td>1306★</td><td>金额超额</td><td>422</td><td>收款累计 &gt; 账单总额；核销额 &gt; 采购单未付额；退货数量 &gt; 原行可退余量</td></tr>
+    <tr><td>1307★</td><td>重复结算</td><td>422</td><td>三层防重复触发：明细锁定行数不符 / 该员工期间预提余额为 0 / 期间已结算</td></tr>
+    <tr><td>1308★</td><td>取价失败</td><td>422</td><td>无任何生效价格规则且无标准价兜底（数据配置不完整）</td></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>1400-1499 账号状态</b></td></tr>
+    <tr><td>1401</td><td>账号锁定</td><td>403</td><td>连续失败 5 次锁 15 分钟；message 带剩余分钟</td></tr>
+    <tr><td>1402★</td><td>旧密码不正确</td><td>400</td><td>改密时 oldPassword 校验失败（不计入锁定计数）</td></tr>
+    <tr><td colspan="4" style="background:var(--fill)"><b>1500-1599 系统</b></td></tr>
+    <tr><td>1500</td><td>服务器内部错误</td><td>500</td><td>兜底；error 日志 + traceId；前端展示"系统开小差了（traceId: t-xxx）"</td></tr>
+    <tr><td>1501★</td><td>数据库繁忙</td><td>503</td><td>死锁重试 2 次仍失败 / 连接超时；建议稍后重试</td></tr>
+  </table>
+
+  <h3>5.3 后端全局异常过滤器（C4，处理顺序）</h3>
+  <ol>
+    <li><code>BizError</code>（业务层主动抛出，携带 code + message + 可选 details）→ 直接映射</li>
+    <li><code>BadRequestException</code>（ValidationPipe）→ 1001（details 取 constraints）</li>
+    <li><code>HttpException</code> 框架异常 → 按 status 反查 404/401/403</li>
+    <li>Prisma 已知错误：<code>P2002</code>（唯一冲突）→ 1305；<code>P2025</code>（记录不存在）→ 1204</li>
+    <li>其余未知异常 → 1500：<code>logger.error({ err, traceId })</code> 落错误日志（含堆栈），响应体不含堆栈</li>
+  </ol>
+<pre><code>// BizError 用法（service 层）
+throw new BizError(1301, `库存不足：${warehouse.name} - ${material.name}`);
+throw new BizError(1307, '王五 2026-10 期间已全部结算，不可重复生成');
+// 过滤器骨架
+@Catch()
+export class AllExceptionsFilter implements ExceptionFilter {
+  catch(exc: unknown, host: ExecutionContext) {
+    const { code, message, details } = this.normalize(exc);   // 按上述顺序归一化
+    const traceId = req.traceId;                              // 中间件已注入
+    if (code &gt;= 1500) logger.error({ err: exc, traceId, ...ctx });
+    res.status(httpOf(code)).json({ code, message, details, traceId });
+  }
+}</code></pre>
+
+  <h3>5.4 前端拦截器策略（axios response interceptor，三端共用逻辑）</h3>
+  <table>
+    <tr><th style="width:90px">code</th><th style="width:230px">PC Web 行为</th><th>移动端行为（员工文案人话化）</th></tr>
+    <tr><td>0</td><td>正常返回 data</td><td>同左</td></tr>
+    <tr><td>网络错误/超时</td><td>Message.error('网络异常，请重试')；GET 自动重试 1 次</td><td>保存草稿 + Toast"网不好，等会儿再点一次，填的还在"；同幂等键重试</td></tr>
+    <tr><td>1001/1002</td><td>表单逐字段标红（details.field）</td><td>Toast 首条 msg（"数量要大于 0"）</td></tr>
+    <tr><td>1003</td><td>提示并重置非法排序参数</td><td>—（移动端无自定义排序）</td></tr>
+    <tr><td>1101</td><td>清会话 → 跳 /login?redirect=</td><td>先尝试 refresh，失败再跳 /m/login</td></tr>
+    <tr><td>1102</td><td>Message.error('无权限执行此操作')</td><td>Toast"这个你点不了，找管理员"</td></tr>
+    <tr><td>1103</td><td>跳强制改密页（全屏拦截）</td><td>跳 /m/force-change-password</td></tr>
+    <tr><td>1302</td><td>Message.warning('正在处理，请勿重复提交')；按钮禁用 3s</td><td>Toast"正在处理，别急着重复点"</td></tr>
+    <tr><td>1304</td><td>Modal'数据已被他人修改，请刷新'，重拉详情</td><td>—（移动端无并发编辑场景）</td></tr>
+    <tr><td>1301/1303/1306/1307</td><td>直接展示 message</td><td>直接展示 message（已保证人话）</td></tr>
+    <tr><td>1500/1501</td><td>Notification 显示 message + traceId（可复制）</td><td>Toast"系统开小差了（t-xxx）"，草稿保留</td></tr>
+  </table>
+  <div class="callout c-warn"><b>兜底原则：</b>任何异常不允许裸奔 500 HTML 或堆栈外泄；前端 <code>app.config.errorHandler</code> + 路由错误兜底页双保险；<code>GET /health</code> 不参与包装（探活专用）。</div>
+</section>
+
+<section id="s6">
+  <h2><span class="no">6</span>日志格式</h2>
+
+  <h3>6.1 日志体系总览</h3>
+  <table>
+    <tr><th style="width:130px">日志</th><th style="width:170px">载体 / 切割</th><th>保留策略</th></tr>
+    <tr><td>应用日志（请求/业务）</td><td>pino → <code>logs/app-YYYY-MM-DD.log</code>（按天切割）</td><td>30 天</td></tr>
+    <tr><td>错误日志</td><td>pino level≥error → <code>logs/error-YYYY-MM-DD.log</code>（独立文件）</td><td>90 天；每日巡检（见 6.6）</td></tr>
+    <tr><td>审计日志</td><td>DB 表 <code>audit_logs</code>（6.5）</td><td>永久（只增不改不删）</td></tr>
+    <tr><td>访问日志</td><td>Nginx access.log</td><td>30 天</td></tr>
+  </table>
+
+  <h3>6.2 pino JSON 行格式字段表</h3>
+  <table>
+    <tr><th style="width:120px">字段</th><th style="width:120px">类型</th><th>说明</th></tr>
+    <tr><td>time</td><td>ISO 字符串</td><td><code>2026-10-15T09:42:11.382Z</code>（pino timestamp 配 pino-pretty 仅开发环境）</td></tr>
+    <tr><td>level</td><td>number</td><td>30 info（请求/业务）/ 40 warn / 50 error（独立文件）/ 20 debug（仅 dev）</td></tr>
+    <tr><td>traceId</td><td>string</td><td><code>t-</code>+12 位 hex；每请求一个，贯穿全部日志（见 6.4）</td></tr>
+    <tr><td>userId</td><td>number|null</td><td>登录后必带；未登录（如 /auth/login）为 null</td></tr>
+    <tr><td>module / action</td><td>string</td><td>模块名（sales / piece / wage...）与动作（order.create / approve / settle.confirm...）</td></tr>
+    <tr><td>method / path / statusCode</td><td>string / number</td><td>仅请求日志：HTTP 方法、路径（不含 query 值）、响应码</td></tr>
+    <tr><td>durationMs</td><td>number</td><td>仅请求日志：耗时；&gt;1000ms 额外打 warn</td></tr>
+    <tr><td>msg</td><td>string</td><td>人读摘要，如 "销售订单创建 SO20261015001"</td></tr>
+    <tr><td>biz</td><td>object?</td><td>业务上下文：{ no, orderId, employeeId, amount... }（金额字符串）</td></tr>
+    <tr><td>err</td><td>object?</td><td>仅错误日志：{ type, message, stack }（pino serialize）</td></tr>
+  </table>
+
+  <h3>6.3 示例日志行（生产 JSON）</h3>
+<pre><code>// 请求日志（info，每个请求出口一行）
+{"time":"2026-10-15T09:42:11.382Z","level":30,"traceId":"t-8f3a1c2d4e5f","userId":101,
+ "module":"sales","action":"order.create","method":"POST","path":"/api/v1/sales/orders",
+ "statusCode":200,"durationMs":86,"msg":"ok"}
+
+// 业务日志（info，关键动作；biz 携带单据上下文）
+{"time":"2026-10-15T09:42:11.301Z","level":30,"traceId":"t-8f3a1c2d4e5f","userId":101,
+ "module":"sales","action":"order.create","msg":"销售订单创建 SO20261015001",
+ "biz":{"no":"SO20261015001","customerId":12,"totalAmount":"475.00","itemCount":1}}
+
+// 错误日志（error，独立文件；含堆栈；触发 1500 响应）
+{"time":"2026-10-15T10:01:22.917Z","level":50,"traceId":"t-b2c4d5e6f708","userId":101,
+ "module":"wage","action":"settle.batch.confirm","msg":"批量确认失败，已回滚",
+ "biz":{"batchId":21,"employeeCount":3},
+ "err":{"type":"PrismaClientKnownRequestError","message":"deadlock detected","stack":"..."}}
+
+// 审计旁证（info；正式审计在 audit_logs 表，此处为同事务冗余行）
+{"time":"2026-10-15T11:20:05.110Z","level":30,"traceId":"t-c3d5e6f70819","userId":105,
+ "module":"piece","action":"audit.approve","msg":"报工审核通过 WR20261015001",
+ "biz":{"reportNo":"WR20261015001","employeeId":8,"totalAmount":"590.00","adjusted":true}}</code></pre>
+
+  <h3>6.4 traceId 贯穿规范</h3>
+  <table>
+    <tr><th style="width:130px">环节</th><th>规则</th></tr>
+    <tr><td>生成</td><td>请求中间件 first-touch：优先取请求头 <code>X-Trace-Id</code>（前端 axios 拦截器生成 <code>t-</code>+12 hex），无则服务端 <code>crypto.randomBytes(6)</code> 生成；<b>每请求唯一</b></td></tr>
+    <tr><td>注入</td><td>Nest 中间件写入 <code>AsyncLocalStorage</code>；pino 子 logger 自动携带；service / repository 无需手工传参</td></tr>
+    <tr><td>返回</td><td>响应头 <code>X-Trace-Id</code> 回显；错误响应体 <code>traceId</code> 字段；成功响应体也带（便于对账）</td></tr>
+    <tr><td>前端</td><td>axios 每请求生成（重试复用同一个）；响应拦截器 console.debug 打印 traceId（截图报障用）；错误弹窗展示可复制</td></tr>
+    <tr><td>跨日志关联</td><td>同一 traceId 可在 app/error 两个文件 + Nginx access（$request_id 附注）中检索；运维命令：<code>grep 't-8f3a' logs/*.log</code></td></tr>
+    <tr><td>定时任务</td><td>cron 每次运行生成独立 traceId（前缀 <code>t-cron-</code>），预警产生异常可追溯当次扫描</td></tr>
+  </table>
+
+  <h3>6.5 审计日志（audit_logs；C7 <code>@Audit()</code> 切面，事务内写入）</h3>
+  <table>
+    <tr><th style="width:220px">action（动作码）</th><th style="width:190px">resource</th><th>记录内容（before / after）</th></tr>
+    <tr><td>piece.approve / piece.reject</td><td>work_report</td><td>行级 confirmed_qty 前后值 + adjust_reason；驳回原因</td></tr>
+    <tr><td>piece.void（红冲）</td><td>work_report</td><td>作废原因 + 受影响明细行 + 库存反向流水号</td></tr>
+    <tr><td>wage.settle.confirm / wage.settle.void</td><td>wage_settlement / batch</td><td>settle_date、金额；作废时明细回预提清单</td></tr>
+    <tr><td>sales.price.manual（改价）</td><td>sales_order_item</td><td>原快照价 → 改后价 + 改价人（draft 可改价权限）</td></tr>
+    <tr><td>user.reset-password</td><td>user</td><td>不记录密码明文/哈希，仅记录"已重置 + token_version+1"</td></tr>
+    <tr><td>stock.adjust / stock.opening</td><td>stock</td><td>调整前后 qty、原因、单据号</td></tr>
+    <tr><td>bill.void 等所有 void / return（红冲类）</td><td>对应单据</td><td>原因必填 + 反向影响清单</td></tr>
+    <tr><td>payment.create / receipt.create</td><td>payment / receipt</td><td>金额、方式、核销关系</td></tr>
+  </table>
+  <ul>
+    <li>字段：user_id / action / resource / resource_id / before_json / after_json / ip（INET）/ created_at（见 3.10）</li>
+    <li><b>脱敏规则：</b>password、password_hash、token、refreshToken 永不写入任何日志；photos URL 可写；金额写字符串</li>
+    <li>写入方式：与业务同事务（保证"有此操作必留痕"）；查询入口 GET /audit-logs（sys_admin）</li>
+  </ul>
+
+  <h3>6.6 采样、切割与巡检</h3>
+  <ul>
+    <li><b>级别策略：</b>生产 info 起（请求日志全量，&lt;10 QPS 量级无压力）；开发 debug；<code>GET /health</code> 与 Nginx 探活不记请求日志</li>
+    <li><b>切割：</b>pino-roll 按天切割 + 压缩（.gz）；logrotate 兜底 Nginx</li>
+    <li><b>每日巡检（不引入 Sentry）：</b>cron 07:30 汇总前一日 error 文件（按 code / module 聚合计数）→ 生成一条应用内通知给 sys_admin / super_admin；重大（1501 数据库繁忙、连续 1500）额外标红</li>
+    <li><b>磁盘保护：</b>日志目录水位 &gt;80% 告警并提示清理 .gz；单日 error &gt;100 行触发巡检通知升级</li>
+  </ul>
+</section>
+<section id="s7">
+  <h2><span class="no">7</span>页面设计与仿真</h2>
+  <p>本章把 v1.5 §9/§10 的页面设计展开为<b>可开发对照的线框仿真</b>：PC 端给出路由清单与 6 个关键页面线框，移动端给出信息架构与 6 个手机屏仿真。所有仿真为结构示意（非视觉稿），标注了必须实现的交互规则与绑定接口。</p>
+
+  <h3>7.1 PC 端设计规范</h3>
+  <table>
+    <tr><th style="width:120px">项</th><th>规范</th></tr>
+    <tr><td><b>色板</b></td><td>主色 <code>#165DFF</code>（按钮/链接/选中态）；成功 <code>#00B42A</code>（金额/已确认）；警告 <code>#FF7D00</code>（待处理/预警）；危险 <code>#F53F3F</code>（驳回/红冲/负数）；紫 <code>#722ED1</code>（价格来源标签、系统类 Tag）。状态列一律用彩色 Tag，不用彩色文字</td></tr>
+    <tr><td><b>字体与数字</b></td><td>PingFang SC / Inter；正文 14px、表格 13px。金额与数量列<b>右对齐 + 等宽字体 + 千分位</b>；金额保留 2 位、单价 4 位、数量原精度（后端给什么展示什么，一律字符串）</td></tr>
+    <tr><td><b>布局骨架</b></td><td>左侧菜单 220px（按权限码渲染，菜单树常量放 <code>packages/shared/menu.ts</code>）+ 顶栏 44px（面包屑 / 通知铃铛角标 / 用户下拉）+ 内容区自适应（列表页最大 1440px 居中）</td></tr>
+    <tr><td><b>统一查询规范</b></td><td>所有列表页强制（v1.5 §9.1）：常用筛选平铺 + 高级折叠，偏好存 localStorage；单搜索框模糊覆盖编码/名称/单号；时间快捷项（今天/本周/本月/上月/自定义）；<b>底部全量合计行</b>（读响应 <code>sum</code> 字段，禁止前端累加当前页）；列头排序走后端白名单；空状态显示当前条件 + 一键清除；Excel 导出复用筛选（上限 1 万行）</td></tr>
+    <tr><td><b>表单模式</b></td><td>简单档案 = 抽屉（400-600px，必填在上、选填折叠）；单据类 = <b>独立页</b>（表头区 + 明细表格行内编辑 + 底部合计与操作栏）；多步流程 = 向导页（步骤条 + 单步校验）</td></tr>
+    <tr><td><b>响应式断点</b></td><td>≥992px 完整体验；768-991px 可用（表格横向滚动，工具栏折行）；&lt;768px 顶部黄条引导"管理操作请使用电脑端"（不跳转，仅提示）</td></tr>
+    <tr><td><b>交互红线</b></td><td>所有写操作按钮提交即 loading 锁定 + 幂等键；乐观锁冲突（1243）弹窗"他人已修改，点击刷新载入最新"；1103 强制改密路由拦截；401 静默刷新 token 后重放原请求（仅一次）</td></tr>
+  </table>
+
+  <h3>7.2 PC 端路由与页面清单</h3>
+  <p>路由文件 <code>apps/pc/src/router/index.ts</code>，视图按模块分目录。页面模式：◆列表页 ◇表单抽屉 ▣独立单据页 ◎向导页 ▮只读页。</p>
+  <table>
+    <tr><th>路由</th><th>视图（apps/pc/src/views/）</th><th style="width:60px">模式</th><th style="width:230px">代表权限码</th></tr>
+    <tr><td><code>/login</code></td><td>auth/Login.vue（+ 强制改密对话框）</td><td>▮</td><td>公开</td></tr>
+    <tr><td><code>/dashboard</code></td><td>dashboard/Index.vue（四卡片穿透）</td><td>▮</td><td>登录即可</td></tr>
+    <tr><td><code>/base/products</code> <code>/base/categories</code> <code>/base/warehouses</code></td><td>base/ProductList.vue / CategoryList.vue / WarehouseList.vue（产品详情抽屉含各仓分布+近期流水+各等级价）</td><td>◆◇</td><td><code>base:product:read</code> 等</td></tr>
+    <tr><td><code>/base/customers</code> <code>/base/suppliers</code> <code>/base/employees</code></td><td>base/CustomerList.vue / SupplierList.vue / EmployeeList.vue（员工含启用/停用、绑定用户账号）</td><td>◆◇</td><td><code>base:customer:read</code> 等</td></tr>
+    <tr><td><code>/base/wage-prices</code> <code>/base/price-rules</code> <code>/base/piece-scope</code></td><td>base/WagePriceList.vue / PriceRuleList.vue / PieceScopeList.vue（计件范围：选员工/选标签）</td><td>◆◇</td><td><code>piece:price:read</code> <code>sales:price:read</code></td></tr>
+    <tr><td><code>/stock/inventory</code></td><td>stock/Inventory.vue（三视图 Tab：按物料/按仓库/汇总）</td><td>◆</td><td><code>stock:query</code></td></tr>
+    <tr><td><code>/stock/ledger</code> <code>/stock/transfer</code></td><td>stock/Ledger.vue（结余列+期初期末）；stock/Transfer.vue（调拨/调整/期初入口，期初仅启用初期显示）</td><td>◆▣</td><td><code>stock:query</code> <code>stock:transfer</code></td></tr>
+    <tr><td><code>/purchase/inbounds</code> <code>/purchase/returns</code> <code>/purchase/payments</code> <code>/purchase/payables</code></td><td>purchase/InboundList.vue / ReturnList.vue / PaymentList.vue / PayableReport.vue</td><td>◆▣/◇</td><td><code>purchase:inbound:read</code> 等</td></tr>
+    <tr><td><code>/sales/orders</code> <code>/sales/orders/new</code> <code>/sales/orders/:id</code></td><td>sales/OrderList.vue / OrderForm.vue（独立单据页）/ OrderDetail.vue（含拣货入口、二联单打印、退货入口）</td><td>◆▣</td><td><code>sales:order:read</code> <code>sales:order:create</code></td></tr>
+    <tr><td><code>/sales/picking</code> <code>/sales/returns</code></td><td>sales/PickingList.vue（打印拣货单→确认出库）/ ReturnList.vue</td><td>◆▣</td><td><code>sales:picking:execute</code></td></tr>
+    <tr><td><code>/process/deliveries</code></td><td>process/DeliveryList.vue（发料出库→员工仓在制；打印配送单）</td><td>◆▣</td><td><code>process:delivery:read</code> 等</td></tr>
+    <tr><td><code>/piece/reports</code> <code>/piece/approvals</code></td><td>piece/ReportList.vue / ApprovalList.vue（审核页含照片放大、行级改数量、原因必填）</td><td>◆</td><td><code>piece:report:read</code> <code>piece:approve</code></td></tr>
+    <tr><td><code>/piece/settlement</code> <code>/piece/accruals</code> <code>/piece/statistics</code></td><td>piece/Settlement.vue（◎向导：圈选→预览→生成→打单→确认）；AccrualList.vue（全员预提余额）；Statistics.vue（四视图报表）</td><td>◎◆</td><td><code>wage:settle:read</code> <code>wage:settle:confirm</code></td></tr>
+    <tr><td><code>/report/sales</code> <code>/report/profit</code></td><td>report/SalesReport.vue / ProfitReport.vue</td><td>◆</td><td><code>report:profit:read</code> 等</td></tr>
+    <tr><td><code>/bill/bills</code> <code>/bill/receipts</code> <code>/bill/alerts</code></td><td>bill/BillList.vue（明细穿透销售订单）/ ReceiptList.vue / AlertCenter.vue</td><td>◆◇</td><td><code>bill:read</code> <code>bill:receipt:create</code></td></tr>
+    <tr><td><code>/sys/users</code> <code>/sys/roles</code> <code>/sys/audit-logs</code> <code>/sys/logs</code> <code>/sys/print-templates</code></td><td>system/UserList.vue（重置密码二次确认）/ RoleMatrix.vue（只读）/ AuditLogs.vue / <b>RunLogs.vue（运行日志查询★）</b> / PrintTemplates.vue（hiprint 设计器）</td><td>◆▮</td><td><code>sys:user:manage</code> <code>sys:log:read</code> 等</td></tr>
+  </table>
+  <div class="callout c-info">路由守卫顺序：① 无 token → /login；② <code>must_change_password=true</code> → 强制停留改密；③ 路由 meta 权限码不在用户权限集 → 403 页。菜单树与路由 meta 使用同一份权限码常量（shared 包），避免两处维护。</div>
+
+  <h3 id="s7-3">7.3 PC 端页面仿真</h3>
+
+  <h4>a) 登录页</h4>
+  <div class="mock-label">PC 仿真 · 登录页（POST /auth/login）</div>
+  <div class="frame"><div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">▣ 仓储进销存 ERP</div>
+      <div class="login-field">账号<input value="zhangsan"></div>
+      <div class="login-field">密码<input type="password" value="••••••"></div>
+      <div class="p-btn" style="margin-top:14px">登 录</div>
+      <div class="login-tip">连续失败 5 次将锁定 15 分钟 · 初始密码首次登录须修改</div>
+    </div>
+  </div></div>
+  <ul>
+    <li>登录成功：accessToken 存内存、refreshToken 由后端 Set-Cookie（httpOnly）；若 <code>must_change_password=true</code> 直接进入改密对话框（不可关闭），改密成功后 token_version+1 重新登录</li>
+    <li>错误提示映射：1101 账号或密码不对；1102 已锁定还剩 X 分钟；1301 旧密码不正确（改密时）</li>
+  </ul>
+
+  <h4>b) 工作台看板（四卡片穿透）</h4>
+  <div class="mock-label">PC 仿真 · 工作台（GET /dashboard/summary）</div>
+  <div class="frame pc">
+    <div class="pc-top"><span class="logo">▣ ERP</span><span class="crumb">工作台</span><span class="user"><span class="avatar">管</span>管理员 · super_admin</span></div>
+    <div class="pc-body">
+      <div class="pc-side">
+        <div class="mi on">工作台</div><div class="mi">基础数据</div><div class="mi">库存管理</div>
+        <div class="mi">采购管理</div><div class="mi">销售管理</div><div class="mi">加工外发</div>
+        <div class="mi">计件工资</div><div class="mi">账单中心</div><div class="mi">系统管理</div>
+      </div>
+      <div class="pc-cont">
+        <div class="statgrid">
+          <div class="stat warn"><div class="num">6</div><div class="lb">待审核报工 → 穿透 /piece/approvals</div></div>
+          <div class="stat"><div class="num">8</div><div class="lb">待发货订单 → 穿透 /sales/orders?status=confirmed</div></div>
+          <div class="stat danger"><div class="num">5</div><div class="lb">库存预警物料 → 穿透 /stock/inventory?warn=1</div></div>
+          <div class="stat warn"><div class="num">3 家 / 42,300.00</div><div class="lb">账期预警客户 → 穿透 /bill/alerts</div></div>
+        </div>
+        <div class="p-card" style="margin:10px 0">今日动态：入库 2 单 · 出库 5 单 · 新报工 11 条 · 已结算工钱 0</div>
+      </div>
+    </div>
+  </div>
+  <ul>
+    <li>四卡片一次接口返回（<code>GET /dashboard/summary</code>），数字为 SQL COUNT/SUM；卡片点击 = 路由跳转并<b>自动带上筛选参数</b>（目标列表页须支持 URL query 初始化筛选）</li>
+    <li>卡片按权限渲染：无 <code>piece:approve</code> 则不显示待审核卡片（不显示数字 0）</li>
+  </ul>
+
+  <h4>c) 销售订单创建（独立单据页）</h4>
+  <div class="mock-label">PC 仿真 · 新建销售订单（POST /sales/orders + Idempotency-Key）</div>
+  <div class="frame pc">
+    <div class="pc-top"><span class="logo">▣ ERP</span><span class="crumb">销售管理 / 销售订单 / 新建</span><span class="user"><span class="avatar">张</span>张销售</span></div>
+    <div class="pc-body">
+      <div class="pc-side">
+        <div class="mi">工作台</div><div class="mi">基础数据</div><div class="mi">库存管理</div>
+        <div class="mi">采购管理</div><div class="mi on">销售管理</div><div class="mi">加工外发</div>
+        <div class="mi">计件工资</div><div class="mi">账单中心</div><div class="mi">系统管理</div>
+      </div>
+      <div class="pc-cont">
+        <div class="pc-toolbar" style="background:#fff;padding:10px;border:1px solid var(--border);border-radius:4px">
+          <span class="inp" style="min-width:150px">客户：宏达商贸（等级 A）▾</span>
+          <span class="inp">单据日期：2026-10-15</span>
+          <span class="inp">承诺发货：2026-10-18</span>
+          <span class="inp" style="min-width:60px">备注</span>
+          <span style="flex:1"></span><span class="btn b-plain">存为草稿</span><span class="btn b-pri">提交并确认</span>
+        </div>
+        <table class="mtab">
+          <tr><th>物料（搜索编码/名称）</th><th>包装</th><th>数量</th><th>单价</th><th>参考件价</th><th>小计(元)</th><th></th></tr>
+          <tr><td>合页 3寸（FP-1001）<span class="tag t-purple" style="margin-left:6px">level</span></td><td>袋（200件/袋）▾</td><td><b>5 袋</b></td><td>84.0000 元/袋</td><td style="color:var(--text-3)">0.4200 元/件</td><td><b>420.00</b></td><td style="color:var(--danger)">删</td></tr>
+          <tr><td>拉手 4寸（FP-2003）<span class="tag t-purple" style="margin-left:6px">exclusive</span></td><td>箱（1000件/箱）▾</td><td><b>3 箱</b></td><td>52.5000 元/箱</td><td style="color:var(--text-3)">0.0525 元/件</td><td><b>157.50</b></td><td style="color:var(--danger)">删</td></tr>
+          <tr><td style="color:var(--primary)">＋ 添加明细行</td><td colspan="6"></td></tr>
+          <tr class="sum-row"><td colspan="5">合计（提交后由 GET …?id= 的 sum 字段回显校验）</td><td>577.50</td><td></td></tr>
+        </table>
+        <div class="callout c-info" style="margin:10px 0 0;font-size:12px">计价规则自动带出：专属价 &gt; 等级价 &gt; 标准价（price_source 标签显示来源）；draft 状态有 <code>sales:price:manual</code> 权限可改价（审计记录原价→新价），confirm 后锁定。</div>
+      </div>
+    </div>
+  </div>
+  <ul>
+    <li><b>列头强制区分</b>：数量列含包装名（"5 袋"）、单价列含单位（"元/袋"）、参考件价灰字辅助——与打印二联单四列完全一致</li>
+    <li>物料下拉：远程搜索（防抖 300ms，<code>GET /materials?keyword=</code>），选中后带出默认包装与计价预览；行内切换包装自动重算单价与小计（decimal.js）</li>
+    <li>"提交并确认" = <code>POST /sales/orders</code>（body.status=confirmed）一次落库；拆开操作则先 draft 再 <code>POST /sales/orders/{id}/confirm</code>（1240 校验库存后锁价）</li>
+  </ul>
+
+  <h4>d) 库存三视图</h4>
+  <div class="mock-label">PC 仿真 · 库存总览（GET /stock/inventory?view=material）</div>
+  <div class="frame pc">
+    <div class="pc-top"><span class="logo">▣ ERP</span><span class="crumb">库存管理 / 库存总览</span><span class="user"><span class="avatar">仓</span>王仓管</span></div>
+    <div class="pc-body">
+      <div class="pc-side">
+        <div class="mi">工作台</div><div class="mi">基础数据</div><div class="mi on">库存管理</div>
+        <div class="mi">采购管理</div><div class="mi">销售管理</div><div class="mi">加工外发</div>
+        <div class="mi">计件工资</div><div class="mi">账单中心</div><div class="mi">系统管理</div>
+      </div>
+      <div class="pc-cont">
+        <div class="pctabs"><span class="on">按物料</span><span>按仓库</span><span>汇总</span></div>
+        <div class="pc-toolbar">
+          <span class="inp">物料编码/名称</span><span class="inp">仓库：全部 ▾</span><span class="inp">仅看预警 ☑</span>
+          <span class="btn b-pri">查 询</span><span class="btn b-plain">导出 Excel</span>
+        </div>
+        <table class="mtab">
+          <tr><th>物料编码</th><th>名称</th><th>单位</th><th>在库总量</th><th>可用量</th><th>安全库存</th><th>状态</th><th>分布</th></tr>
+          <tr><td>FP-1001</td><td>合页 3寸（镀镍）</td><td>件</td><td>128,500</td><td>128,500</td><td>50,000</td><td><span class="tag t-green">正常</span></td><td>3 仓 ▾</td></tr>
+          <tr><td>FP-2003</td><td>拉手 4寸（孔距96）</td><td>件</td><td><b style="color:var(--danger)">38,200</b></td><td>38,200</td><td>40,000</td><td><span class="tag t-red">低于安全库存</span></td><td>2 仓 ▾</td></tr>
+          <tr><td>WG-0567</td><td>抽轨 14寸</td><td>件</td><td>265,000</td><td>255,000</td><td>—</td><td><span class="tag t-blue">正常</span></td><td>含在制 10,000（张三）</td></tr>
+          <tr class="sum-row"><td colspan="3">合计（sum 行，SQL SUM）</td><td>431,700</td><td>421,700</td><td colspan="3"></td></tr>
+        </table>
+        <div class="pg"><i>‹</i><i class="on">1</i><i>2</i><i>›</i></div>
+      </div>
+    </div>
+  </div>
+  <ul>
+    <li>三视图共用一套筛选；"按物料"行可展开各仓分布（子弹行）；<b>员工虚拟仓不出现在仓库下拉</b>，其数量并入"在制"提示</li>
+    <li>"仅看预警"= <code>warn=1</code>（qty &lt; safety_qty）；合计行来自响应 <code>sum</code> 字段</li>
+  </ul>
+
+  <h4>e) 工资结算向导（五步）</h4>
+  <div class="mock-label">PC 仿真 · 工资结算 · 第 2 步预览勾稽（GET /wage/settlement/preview）</div>
+  <div class="frame pc">
+    <div class="pc-top"><span class="logo">▣ ERP</span><span class="crumb">计件工资 / 工资结算</span><span class="user"><span class="avatar">财</span>李财务</span></div>
+    <div class="pc-body">
+      <div class="pc-side">
+        <div class="mi">工作台</div><div class="mi">基础数据</div><div class="mi">库存管理</div>
+        <div class="mi">采购管理</div><div class="mi">销售管理</div><div class="mi">加工外发</div>
+        <div class="mi on">计件工资</div><div class="mi">账单中心</div><div class="mi">系统管理</div>
+      </div>
+      <div class="pc-cont">
+        <div class="wsteps">
+          <div class="wstep done">① 圈选范围</div><div class="wstep on">② 预览勾稽</div><div class="wstep">③ 生成批次</div><div class="wstep">④ 打单核对</div><div class="wstep">⑤ 确认结算</div>
+        </div>
+        <div class="pc-toolbar">
+          <span class="inp">范围类型：月度 2026-09 ▾</span><span class="inp">员工：全体（12 人）▾</span>
+          <span class="tag t-blue">月结 2026-09-01 ~ 09-30</span><span class="btn b-plain">上一步</span>
+          <span style="flex:1"></span><span class="btn b-pri">生成结算批次（勾选 3 人）</span>
+        </div>
+        <table class="mtab">
+          <tr><th>☑</th><th>员工</th><th>报工单数</th><th>明细行数</th><th>预提合计(元)</th><th>本次可结算</th><th>状态</th></tr>
+          <tr><td>☑</td><td>张三（001）</td><td>22</td><td>26</td><td>12,840.00</td><td><b>12,840.00</b></td><td><span class="tag t-blue">预提中</span></td></tr>
+          <tr><td>☑</td><td>李四（002）</td><td>18</td><td>18</td><td>9,215.50</td><td><b>9,215.50</b></td><td><span class="tag t-blue">预提中</span></td></tr>
+          <tr><td>☑</td><td>王五（003）</td><td>15</td><td>16</td><td>8,904.00</td><td><b>8,904.00</b></td><td><span class="tag t-blue">预提中</span></td></tr>
+          <tr><td>—</td><td>赵六（004）</td><td>9</td><td>9</td><td>4,120.00</td><td>0.00</td><td><span class="tag t-gray">该期间已结算</span></td></tr>
+          <tr class="sum-row"><td></td><td>合计（勾选 3 人）</td><td>55</td><td>60</td><td>30,959.50</td><td>30,959.50</td><td></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <ul>
+    <li>①圈选：范围类型二选一——<b>月度（某自然月）或日期范围（起止自由圈选，与月度可重叠不冲突）</b>；员工多选/全体；被"该期间已结算"占满的员工自动置灰</li>
+    <li>②预览：按员工聚合 settlement_id IS NULL 的明细（SQL SUM）；明细行数与金额须与预提余额列表（/piece/accruals）勾稽相等</li>
+    <li>③生成：<code>POST /wage/settlement/batches</code>（幂等键）一个事务建批次 + N 张 wage_settlements（status=pending），三层防重复见 4.3-o</li>
+    <li>④打单：批次详情页逐员工打 <code>wage_slip</code> + 批量打 <code>wage_settlement_summary</code> 汇总清单（列出所有记录，见 §8）</li>
+    <li>⑤确认：指定 <b>settle_date</b>（默认当天可改）→ 明细 settlement_id 回填（条件更新行数校验）→ 红冲则整批作废明细回预提</li>
+  </ul>
+
+  <h4>f) 审计日志 / 运行日志</h4>
+  <div class="mock-label">PC 仿真 · 操作日志（GET /audit-logs）与运行日志（GET /sys/logs ★）</div>
+  <div class="frame pc">
+    <div class="pc-top"><span class="logo">▣ ERP</span><span class="crumb">系统管理 / 操作日志</span><span class="user"><span class="avatar">管</span>管理员</span></div>
+    <div class="pc-body">
+      <div class="pc-side">
+        <div class="mi">工作台</div><div class="mi">基础数据</div><div class="mi">库存管理</div>
+        <div class="mi">采购管理</div><div class="mi">销售管理</div><div class="mi">加工外发</div>
+        <div class="mi">计件工资</div><div class="mi">账单中心</div><div class="mi on">系统管理</div>
+      </div>
+      <div class="pc-cont">
+        <div class="pctabs"><span class="on">操作日志</span><span>运行日志 ★</span><span>用户</span><span>角色矩阵</span><span>打印模板</span></div>
+        <div class="pc-toolbar">
+          <span class="inp">操作人</span><span class="inp">动作：piece.approve ▾</span><span class="inp">资源ID</span><span class="inp">时间：今天 ▾</span>
+          <span class="btn b-pri">查 询</span>
+        </div>
+        <table class="mtab">
+          <tr><th>时间</th><th>操作人</th><th>动作</th><th>资源</th><th>IP</th><th>详情</th></tr>
+          <tr><td>10-15 09:41:22</td><td>钱审核</td><td><span class="tag t-green">piece.approve</span></td><td>WR20261015003</td><td>192.168.1.23</td><td style="color:var(--primary)">before/after ▾</td></tr>
+          <tr><td>10-15 09:38:05</td><td>李财务</td><td><span class="tag t-orange">wage.settle.confirm</span></td><td>WS202609300001</td><td>192.168.1.31</td><td style="color:var(--primary)">before/after ▾</td></tr>
+          <tr><td>10-15 09:30:11</td><td>张销售</td><td><span class="tag t-purple">sales.price.manual</span></td><td>SO20261015002#2</td><td>192.168.1.18</td><td style="color:var(--primary)">0.0525→0.0560</td></tr>
+        </table>
+        <div class="pg"><i>‹</i><i class="on">1</i><i>2</i><i>›</i></div>
+      </div>
+    </div>
+  </div>
+  <ul>
+    <li>操作日志详情展开 before/after JSON（密码类字段永不入库）；运行日志页 ★ 为本篇补充：按 traceId / level / 模块 / 时间查询服务端日志文件（只读，sys:log:read 权限），便于运维排查，避免登服务器看文件</li>
+  </ul>
+
+  <h3>7.4 移动端信息架构（H5 / APP 同代码）</h3>
+  <p>底部 Tab 三枚：<b>记工（worker 默认落地页）/ 我的钱 / 通知</b>；具备 <code>piece:approve</code> 权限的账号追加第四枚 <b>审核</b>（v1.5 §10 原型即此形态）。路由文件 <code>apps/mobile/src/router/index.ts</code>：</p>
+  <table>
+    <tr><th>路由</th><th>视图（apps/mobile/src/views/）</th><th style="width:110px">Tab</th><th>绑定接口</th></tr>
+    <tr><td><code>/login</code></td><td>auth/Login.vue（+ 强制改密内嵌页）</td><td>—</td><td>POST /auth/login · PUT /auth/password</td></tr>
+    <tr><td><code>/reports</code></td><td>report/History.vue（倒序历史 + 浮动＋钮）</td><td>记工</td><td>GET /me/work-reports</td></tr>
+    <tr><td><code>/reports/new</code></td><td>report/New.vue（多行明细 + 拍照 + 草稿）</td><td>—</td><td>GET /me/piece-products · POST /me/work-reports</td></tr>
+    <tr><td><code>/reports/:id</code></td><td>report/Detail.vue（照片放大、驳回原因展示）</td><td>—</td><td>GET /me/work-reports/{id}</td></tr>
+    <tr><td><code>/wage</code></td><td>wage/Index.vue（两个大数字 + 明细列表）</td><td>我的钱</td><td>GET /me/wage/summary · /me/wage/items</td></tr>
+    <tr><td><code>/notifications</code></td><td>notify/List.vue（点击穿透单据）</td><td>通知</td><td>GET /notifications · PUT /notifications/{id}/read</td></tr>
+    <tr><td><code>/approvals</code></td><td>approval/List.vue（待审列表）</td><td>审核（第 4 枚）</td><td>GET /piece/reports?status=pending</td></tr>
+    <tr><td><code>/approvals/:id</code></td><td>approval/Detail.vue（照片放大 / 行级改数量 / 驳回）</td><td>—</td><td>POST /piece/reports/{id}/approve · /reject</td></tr>
+    <tr><td><code>/stock</code></td><td>stock/Simple.vue（仓库下拉 + 搜索，只读）</td><td>—（入口在通知页右上或"我的"）</td><td>GET /stock/inventory?view=material</td></tr>
+    <tr><td><code>/docs/:type/:id</code></td><td>docs/View.vue（H5 渲染 + PDF 下载）</td><td>—</td><td>GET /docs/pdf/:type/:id ★</td></tr>
+    <tr><td><code>/me</code></td><td>me/Index.vue（改密 / 退出登录 / APP 版本）</td><td>—</td><td>PUT /auth/password · POST /auth/logout · GET /app/version</td></tr>
+  </table>
+  <div class="callout c-warn"><b>APP 壳差异（Capacitor）：</b>启动时读 SecureStorage 恢复会话（无感续登）；<code>GET /app/version</code> 比对版本号 → 弹"发现新版本"下载整包 APK（URL 来自接口）；Camera 插件拍照失败自动降级 <code>&lt;input capture&gt;</code>；报工草稿写 Filesystem（H5 写 localStorage）。除以上四点，APP 与 H5 行为完全一致。</div>
+
+  <h3>7.5 移动端交互原则（员工端极简五条）</h3>
+  <table>
+    <tr><th style="width:110px">原则</th><th>落地规则</th></tr>
+    <tr><td><b>一屏一事</b></td><td>每页只完成一个任务；无嵌套弹窗、无多级抽屉；流程页（报工）纵向单列排布</td></tr>
+    <tr><td><b>大字大按钮</b></td><td>正文 ≥15px、金额数字 ≥18px 等宽；主按钮通栏高 ≥44px；数量输入调起<b>纯数字键盘</b>（inputmode=decimal）</td></tr>
+    <tr><td><b>能选不输</b></td><td>产品点选（我的常用排序 + 白名单过滤）；日期/仓库用选择器；唯一手输项 = 报工数量</td></tr>
+    <tr><td><b>钱绿色可见</b></td><td>单价与合计 <code>#00B42A</code> 大字；我的钱页"还没发的 / 已经发了的"两个大数字卡片；金额不可编辑</td></tr>
+    <tr><td><b>文案人话</b></td><td>状态：等确认（黄）/ 已确认 ✓（绿）/ 没通过（红）；错误提示示例："网不好，等会儿再点一次，填的还在"；按钮动词："提 交 / 通 过 / 不通过"</td></tr>
+  </table>
+  <ul>
+    <li><b>弱网策略：</b>提交失败自动存草稿（同幂等键）；恢复网络后待重试队列提示"有 1 条没发出去，点这里重试"；GET 自动重试 1 次</li>
+    <li><b>通知：</b>登录后 30s 轮询未读数刷新角标（不做系统推送）；通知点击 = 标记已读 + 跳转对应单据页</li>
+  </ul>
+
+  <h3 id="s7-6">7.6 移动端页面仿真（手机壳）</h3>
+
+  <h4>a) 记工首页 + 新建报工</h4>
+  <div class="mock-label">H5/APP 仿真 · 记工历史（左，默认页） & 新建报工（右）</div>
+  <div class="phones">
+    <div class="phone"><div class="scr">
+      <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="p-nav"><span style="flex:1"></span>我的记工<span style="flex:1"></span><span class="tag t-orange" style="font-size:10px">2条新</span></div>
+      <div class="p-body">
+        <div class="p-card">
+          <div class="p-row"><b>10-15 合页3寸</b><span class="tag t-orange">等确认</span></div>
+          <div class="p-row"><span>12,000 件 × 0.05</span><b style="color:#00B42A">600.00</b></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>10-14 拉手4寸</b><span class="tag t-green">已确认 ✓</span></div>
+          <div class="p-row"><span>35,000 件 × 0.05</span><b style="color:#00B42A">1,750.00</b></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>10-13 抽轨14寸</b><span class="tag t-red">没通过</span></div>
+          <div class="p-row"><span style="color:var(--text-3)">点我看原因</span><b style="color:var(--text-3)">—</b></div>
+        </div>
+      </div>
+      <div style="height:44px"></div>
+      <div class="p-fab">＋</div>
+      <div class="p-tab"><span class="on"><i class="ic">▤</i>记工</span><span><i class="ic">￥</i>我的钱</span><span><i class="ic">🔔</i>通知<sup style="color:var(--danger)">2</sup></span></div>
+    </div></div>
+    <div class="phone"><div class="scr">
+      <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="p-nav"><span class="arr">‹</span>新的记工</div>
+      <div class="p-body">
+        <div class="p-card">
+          <div class="p-row"><span>产品（我常做的）</span><b>合页 3寸 ▾</b></div>
+          <div class="p-row"><span>我的单价</span><b style="color:#00B42A;font-size:16px">0.0500 元/件</b></div>
+          <div class="p-row"><span>数量（件）</span><input style="width:110px;border:1px solid #E5E6EB;border-radius:4px;padding:6px;font-size:16px;text-align:right;font-family:var(--mono)" value="12000"></div>
+          <div class="p-row"><span>小计</span><b style="color:#00B42A">600.00 元</b></div>
+        </div>
+        <div class="p-card" style="color:var(--primary);text-align:center">＋ 再加一个产品</div>
+        <div class="p-photo">＋ 拍照上传（0/3）</div>
+        <div style="background:#F7F8FA;border-radius:6px;padding:8px 12px;margin-top:10px;display:flex;justify-content:space-between;font-size:13px"><span>合计工钱</span><b style="color:#00B42A;font-size:17px">600.00</b></div>
+        <div class="p-btn">提 交</div>
+      </div>
+    </div></div>
+  </div>
+  <ul>
+    <li>记工首页：<code>GET /me/work-reports</code> 倒序分页（下拉刷新 + 触底加载）；状态 Tag 三态文案固定；点卡片进详情（驳回原因 + 照片放大）</li>
+    <li>新建报工：产品下拉 = <code>GET /me/piece-products</code>（计件白名单过滤 + 完成次数倒序）；单价<b>只读绿色</b>（GET /me/wage-rates 返回，防止泄露他人价格）；数量为唯一输入；合计 = Σ(单价×数量) 由<b>后端计算</b>，前端仅预览</li>
+    <li>拍照 ≤3 张，压缩后 <code>POST /files</code>（APP 用 Camera 插件质量 60 / 最大边 1280）；提交带 Idempotency-Key，失败自动进草稿队列</li>
+  </ul>
+
+  <h4>b) 我的工钱 + 审核操作</h4>
+  <div class="mock-label">H5/APP 仿真 · 我的工钱（左，普通员工） & 审核详情（右，审核人）</div>
+  <div class="phones">
+    <div class="phone"><div class="scr">
+      <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="p-nav"><span style="flex:1"></span>我的工钱<span style="flex:1"></span></div>
+      <div class="p-body">
+        <div class="p-big">
+          <div class="cell" style="border-color:#BEDAFF;background:#F5FAFF"><span>还没发的（预提中）</span><b style="color:#165DFF">5,872.50</b></div>
+          <div class="cell" style="border-color:#AFF0B5;background:#FBFFFC"><span>已经发了的</span><b style="color:#00B42A">30,959.50</b></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>10-15 合页3寸 × 12,000</b><span>0.0500</span></div>
+          <div class="p-row"><span>等确认</span><b style="color:#00B42A">600.00</b></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>10-14 拉手4寸 × 35,000</b><span>0.0500</span></div>
+          <div class="p-row"><span>已确认 · 预提</span><b style="color:#00B42A">1,750.00</b></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>09-30 月度结算</b><span class="tag t-green">已结算</span></div>
+          <div class="p-row"><span>结算单 WS202609300001</span><b>12,840.00</b></div>
+        </div>
+      </div>
+      <div style="height:44px"></div>
+      <div class="p-tab"><span><i class="ic">▤</i>记工</span><span class="on"><i class="ic">￥</i>我的钱</span><span><i class="ic">🔔</i>通知</span></div>
+    </div></div>
+    <div class="phone"><div class="scr">
+      <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="p-nav"><span class="arr">‹</span>审核 · 张三 10-15 报工</div>
+      <div class="p-body">
+        <div class="p-card">
+          <div class="p-row"><span>合页 3寸（FP-1001）</span></div>
+          <div class="p-row"><span>报的数量</span><b>12,000 件</b></div>
+          <div class="p-row"><span>确认数量</span><input style="width:110px;border:1px solid #E5E6EB;border-radius:4px;padding:5px;font-size:15px;text-align:right;font-family:var(--mono)" value="12000"></div>
+          <div class="p-step">✎ 数量不一致时必填原因：数量录多了</div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><span>拉手 4寸（FP-2003）</span><span class="tag t-green">未改动</span></div>
+          <div class="p-row"><span>报的数量 = 确认数量</span><b>8,000 件</b></div>
+        </div>
+        <div class="photos"><div class="ph">照片1</div><div class="ph">照片2</div><div class="ph">＋放大</div></div>
+        <div class="p-btn">通 过</div>
+        <div class="p-btn red">不通过</div>
+      </div>
+    </div></div>
+  </div>
+  <ul>
+    <li>我的工钱：两个大数字来自 <code>GET /me/wage/summary</code>（accrued / settled 分开聚合，SQL SUM）；明细来自 <code>/me/wage/items</code>（settlement_id NULL=预提中，非空=关联结算单号可穿透）；<b>仅本人数据</b>（后端强制 employee_id = 当前用户绑定员工）</li>
+    <li>审核详情：行级"确认数量"默认 = 报的数量；改动即出现<b>原因必填</b>黄条；通过 = <code>POST /piece/reports/{id}/approve</code>（逐行 confirmed_qty，事务内完成员工仓→成品仓 + 计件入账 + 通知）；不通过 = 整单驳回（大白话意见必填）</li>
+    <li>审核人 Tab 仅当权限含 <code>piece:approve</code> 时渲染（第 4 枚），普通员工不可见</li>
+  </ul>
+
+  <h4>c) 通知中心 + 库存查询（简化版）</h4>
+  <div class="mock-label">H5/APP 仿真 · 通知中心（左） & 库存查询（右，管理员只读）</div>
+  <div class="phones">
+    <div class="phone"><div class="scr">
+      <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="p-nav"><span style="flex:1"></span>通知<span style="flex:1"></span><span style="font-size:11px;color:var(--primary)">全部已读</span></div>
+      <div class="p-body">
+        <div class="p-card" style="border-left:3px solid var(--primary)">
+          <div class="p-row"><b>报工有了新结果</b><span style="font-size:10px;color:var(--text-3)">2分钟前</span></div>
+          <div class="p-row"><span>10-15 的记工已确认，工钱 600.00 元 → 点进查看</span></div>
+        </div>
+        <div class="p-card" style="border-left:3px solid var(--danger)">
+          <div class="p-row"><b>有一批货该发了</b><span style="font-size:10px;color:var(--text-3)">1小时前</span></div>
+          <div class="p-row"><span>SO20261015001 承诺 10-18 发货 → 去电脑端拣货</span></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>10月工钱已结算</b><span style="font-size:10px;color:var(--text-3)">昨天</span></div>
+          <div class="p-row"><span>结算 12,840.00 元，结算日期 09-30 → 查看结算单</span></div>
+        </div>
+      </div>
+      <div style="height:44px"></div>
+      <div class="p-tab"><span><i class="ic">▤</i>记工</span><span><i class="ic">￥</i>我的钱</span><span class="on"><i class="ic">🔔</i>通知</span></div>
+    </div></div>
+    <div class="phone"><div class="scr">
+      <div class="p-status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="p-nav"><span class="arr">‹</span>查库存</div>
+      <div class="p-body">
+        <div class="p-card">
+          <div class="p-row"><span>仓库</span><b>成品一仓 ▾</b></div>
+          <div class="p-row"><span>物料</span><input placeholder="编码 / 名称" style="flex:1;margin-left:12px;border:1px solid #E5E6EB;border-radius:4px;padding:5px 8px;font-size:12px"></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>FP-1001 合页 3寸</b><span class="tag t-green">正常</span></div>
+          <div class="p-row"><span>在库 96,500 件 · 安全库存 50,000</span></div>
+        </div>
+        <div class="p-card">
+          <div class="p-row"><b>FP-2003 拉手 4寸</b><span class="tag t-red">低于安全</span></div>
+          <div class="p-row"><span>在库 22,000 件 · 安全库存 40,000</span></div>
+        </div>
+        <div class="callout c-warn" style="margin:6px 0 0;font-size:11px">只读查询：入库 / 出库 / 调拨等操作请到电脑端</div>
+      </div>
+    </div></div>
+  </div>
+  <ul>
+    <li>通知中心：未读卡片左侧蓝色竖条 + <code>PUT /notifications/{id}/read</code>；点击卡片 = 已读 + 跳转目标单据（报工详情 / 结算单 / 提示去 PC）；角标 30s 轮询 <code>GET /notifications/unread-count</code></li>
+    <li>库存查询：仅 <code>stock:query</code> 角色可见入口；复用 PC 同一接口（view=material），前端只渲染简化卡片；<b>员工虚拟仓不在下拉中</b></li>
+  </ul>
+</section>
+<section id="s8">
+  <h2><span class="no">8</span>打印模板规格</h2>
+  <p>打印体系 = <b>hiprint 模板（JSON 存库）+ 打印数据接口（后端组装）+ PC 静默打印（hiprint 本地客户端）/ 移动端 PDF（puppeteer 单例）</b>。本章定义 6 个模板的要素、数据上下文与排版规格；模板业务规则以 v1.5 §11 为准，<code>bill_statement</code> 为本篇补充（★，见第 10 节）。</p>
+
+  <h3>8.1 模板总表</h3>
+  <table>
+    <tr><th style="width:190px">code</th><th style="width:170px">纸张 / 设备</th><th style="width:230px">数据接口</th><th>核心要素</th></tr>
+    <tr><td><code>pick_list</code> 拣货单</td><td>A4 激光 或 80mm 热敏</td><td><code>GET /print/pick-list/:orderId</code></td><td>单号/库位/物料编码名称/应拣数量（含包装名）/条码（扫码核对）/拣货人签字/复核签字</td></tr>
+    <tr><td><code>duplicate_note</code> 二联客户单</td><td>针式 LQ-630K · 连续纸二联复写（白联客户 / 红联存根），<b>打一遍自然复写</b></td><td><code>GET /print/duplicate-note/:orderId</code></td><td>客户信息 / 明细四列：<b>数量(含包装"5袋") / 单价(元/袋) / 参考件价 / 总价(元)</b> / 合计 / 金额大写 / 送货签字栏</td></tr>
+    <tr><td><code>delivery_note</code> 配送单</td><td>针式或热敏</td><td><code>GET /print/delivery-note/:id</code></td><td>加工任务号 / 员工姓名地址 / 发料明细（物料/数量/包装）/ 签收栏 / 送货人</td></tr>
+    <tr><td><code>wage_slip</code> 工资结算单（个人）</td><td>A4 或针式</td><td><code>GET /print/wage-slip/:id</code></td><td>员工 / 期间 / 明细（报工单号×数量×单价×金额）/ 预提合计 / <b>结算日期（可指定）</b> / 员工签收 + 经手签字；确认前打单核对，确认后归档再打</td></tr>
+    <tr><td><code>wage_settlement_summary</code> 工资批量汇总清单</td><td>A4 <b>连续纸分页</b>（针式逐员工分页撕分）</td><td><code>GET /print/wage-summary/:batchId</code></td><td><b>列出批次下所有员工的所有记录</b>：按员工分组（结算单号 + 明细行 + 小计）→ 尾部员工合计 + 批次总合计 / 结算日期 / 制表 + 审核签字（详见 8.3-c）</td></tr>
+    <tr><td><code>bill_statement</code> 客户对账单 ★</td><td>A4 激光（月度对账用）</td><td><code>GET /print/bill-statement/:billId</code> ★</td><td>客户 / 账期 / 期初欠款 / 本期销售明细 / 本期收款 / 期末余额 / 双方盖章栏</td></tr>
+  </table>
+
+  <h3>8.2 模板数据上下文（打印接口返回结构）</h3>
+  <p>打印接口统一返回 <code>{template, version, <b>业务数据树</b>, printed_at, printed_by}</code>，金额数量<b>一律字符串</b>（与 API 精度铁律一致），前端把数据树喂给 hiprint 模板占位符。以最复杂的 <code>wage_settlement_summary</code> 为例：</p>
+<pre><code>// GET /print/wage-summary/WB202609300001 → 200
+{
+  "template": "wage_settlement_summary",
+  "version": 3,                          // print_templates.version，随模板维护自增
+  "batch": {
+    "batch_no": "WB202609300001",
+    "period_type": "month",              // month | date_range
+    "period_start": "2026-09-01",
+    "period_end": "2026-09-30",
+    "employee_count": "3",
+    "item_count": "60",                  // 所有员工所有明细行数（勾稽预览页）
+    "total_amount": "30959.50"           // 批次总合计（SQL SUM）
+  },
+  "employees": [                         // 按员工分组，组内含该员工全部记录
+    {
+      "employee": { "code": "001", "name": "张三" },
+      "settlement_no": "WS202609300001",
+      "items": [
+        { "report_no": "WR20260901003", "biz_date": "09-01",
+          "material": "合页 3寸（镀镍）", "qty": "12000",
+          "unit_price": "0.0500", "amount": "600.00" },
+        { "report_no": "WR20260902011", "biz_date": "09-02",
+          "material": "拉手 4寸（孔距96）", "qty": "35000",
+          "unit_price": "0.0500", "amount": "1750.00" }
+        // … 共 26 行
+      ],
+      "subtotal": "12840.00"             // 员工小计（SQL SUM）
+    }
+    // … 共 3 组
+  ],
+  "printed_at": "2026-10-15T09:50:00+08:00",
+  "printed_by": "李财务"
+}</code></pre>
+  <table>
+    <tr><th style="width:190px">模板</th><th>数据树关键字段（除通用单号/日期外）</th></tr>
+    <tr><td><code>pick_list</code></td><td><code>order</code>（单号/客户/等级/承诺发货）· <code>warehouse</code> · <code>lines[]</code>（库位/物料编码/名称/<b>应拣数量含包装名</b>）· <code>barcode</code>（单号 Code128）</td></tr>
+    <tr><td><code>duplicate_note</code></td><td><code>customer</code>（名称/地址/电话）· <code>lines[]</code> 四列（<b>qty_display:"5 袋"</b> / <b>price_display:"84.00 元/袋"</b> / ref_unit_price / amount）· <code>total_amount</code> · <code>amount_cn</code>（大写，后端生成）· <code>copies</code>:["白联·客户","红联·存根"]</td></tr>
+    <tr><td><code>delivery_note</code></td><td><code>task_no</code> · <code>employee</code>（姓名/地址/电话）· <code>lines[]</code>（物料/数量/包装）· 签收栏字段</td></tr>
+    <tr><td><code>wage_slip</code></td><td><code>employee</code> · <code>period</code> · <code>items[]</code>（报工单号×数量×单价×金额）· <code>total</code> · <code>settle_date</code> · 签字栏字段</td></tr>
+    <tr><td><code>bill_statement</code> ★</td><td><code>customer</code> · <code>period</code> · <code>opening_balance</code> · <code>sales_lines[]</code> · <code>receipts[]</code> · <code>closing_balance</code>（勾稽：期初+销售−收款=期末）</td></tr>
+  </table>
+  <div class="callout c-info">展示字段（qty_display / price_display / amount_cn）由<b>后端组装</b>——打印数据必须与数据库口径一致，前端不做业务格式化，只负责排版。这保证 PC 静默打印与移动端 PDF 两种输出内容同源。</div>
+
+  <h3>8.3 排版仿真</h3>
+
+  <h4>a) 拣货单（pick_list · A4）</h4>
+  <div class="mock-label">打印排版仿真 · 拣货单</div>
+  <div class="pprint">
+    <h5>拣 货 单</h5>
+    <div class="sub">PICK LIST · SO20261015001 · 打印时间 2026-10-15 09:42</div>
+    <div class="ln"><span>客户：宏达商贸（A 级）</span><span>承诺发货：2026-10-18</span></div>
+    <div class="ln"><span>拣货仓库：成品一仓</span><span>状态：confirmed → picking</span></div>
+    <table>
+      <tr><th>库位</th><th>物料编码</th><th>物料名称</th><th>应拣数量</th><th>扫码核对</th></tr>
+      <tr><td>A-01-03</td><td>FP-1001</td><td>合页 3寸（镀镍）</td><td><b>3 袋 + 30 件</b></td><td>□</td></tr>
+      <tr><td>A-02-11</td><td>FP-2003</td><td>拉手 4寸（孔距96）</td><td><b>1 箱 + 200 件</b></td><td>□</td></tr>
+    </table>
+    <div class="barcode"><i style="height:100%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:50%"></i><i style="height:100%"></i><i style="height:80%"></i><i style="height:100%"></i><i style="height:60%"></i><i style="height:100%"></i><i style="height:100%"></i><i style="height:40%"></i><i style="height:100%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:90%"></i><i style="height:100%"></i><i style="height:50%"></i><i style="height:100%"></i></div>
+    <div class="sub">拣货人签字：____________　　复核：____________　（条码 = 单号 Code128，PDA 扫码定位）</div>
+  </div>
+  <ul><li>应拣数量 = 拣货单位换算后的<b>混合表达</b>（整包装 + 散件），由后端按物料默认拣货包装计算；打印不锁单据状态（可重复打印）。</li></ul>
+
+  <h4>b) 二联客户单（duplicate_note · 针式连续纸二联复写）</h4>
+  <div class="mock-label">打印排版仿真 · 二联客户单（白联客户 / 红联存根，打一遍自然复写）</div>
+  <div class="pprint">
+    <h5>送 货 单（二联）</h5>
+    <div class="sub">NO. SO20261015001 · 2026-10-15 · 白联：客户 / 红联：存根</div>
+    <div class="ln"><span>客户：宏达商贸（A 级）</span><span>地址：××市××路 12 号</span></div>
+    <div class="ln"><span>电话：138****6688</span><span>送货日期：2026-10-16</span></div>
+    <table>
+      <tr><th>品名</th><th>数量</th><th>单价</th><th>参考件价</th><th>总价(元)</th></tr>
+      <tr><td>合页 3寸（镀镍）</td><td><b>5 袋</b></td><td>84.00 元/袋</td><td>0.4200 元/件</td><td>420.00</td></tr>
+      <tr><td>拉手 4寸（孔距96）</td><td><b>3 箱</b></td><td>52.50 元/箱</td><td>0.0525 元/件</td><td>157.50</td></tr>
+      <tr><td>抽轨 14寸</td><td><b>200 件</b></td><td>0.3100 元/件</td><td>—</td><td>62.00</td></tr>
+      <tr><td colspan="4" style="text-align:right">合计（大写：陆佰叁拾玖元伍角整）</td><td><b>639.50</b></td></tr>
+    </table>
+    <div class="sub">制单：张销售　　送货：____________　　客户签收：____________</div>
+  </div>
+  <ul><li><b>四列强制区分</b>（数量含包装名 / 单价含单位 / 参考件价灰字辅助 / 总价），与 PC 订单页列头完全一致；金额大写后端生成（ROUND 后再转大写）。</li></ul>
+
+  <h4>c) 工资批量汇总清单（wage_settlement_summary · A4 连续纸分页）</h4>
+  <div class="mock-label">打印排版仿真 · 批量结算汇总清单（列出批次下所有员工的所有记录）</div>
+  <div class="pprint">
+    <h5>计件工资批量结算汇总清单</h5>
+    <div class="sub">批次 WB202609300001 · 月结 2026-09-01 ~ 2026-09-30 · 结算日期 2026-09-30 · 打印 2026-10-15 09:50</div>
+    <table>
+      <tr><td class="grp" colspan="5">员工：张三（001） · 结算单 WS202609300001 · 明细 26 行（下表节选）</td></tr>
+      <tr><th>报工单号</th><th>日期</th><th>产品</th><th>数量 × 单价</th><th>金额(元)</th></tr>
+      <tr><td>WR20260901003</td><td>09-01</td><td>合页 3寸</td><td>12,000 × 0.0500</td><td>600.00</td></tr>
+      <tr><td>WR20260902011</td><td>09-02</td><td>拉手 4寸</td><td>35,000 × 0.0500</td><td>1,750.00</td></tr>
+      <tr><td>…（共 26 行）</td><td></td><td></td><td style="text-align:right">小计</td><td><b>12,840.00</b></td></tr>
+      <tr><td class="grp" colspan="5">员工：李四（002） · 结算单 WS202609300002 · 明细 18 行（下表节选）</td></tr>
+      <tr><td>WR20260901008</td><td>09-01</td><td>抽轨 14寸</td><td>20,000 × 0.0500</td><td>1,000.00</td></tr>
+      <tr><td>…（共 18 行）</td><td></td><td></td><td style="text-align:right">小计</td><td><b>9,215.50</b></td></tr>
+      <tr><td class="grp" colspan="5">员工：王五（003） · 结算单 WS202609300003 · 明细 16 行（略）</td></tr>
+      <tr><td>…</td><td></td><td></td><td style="text-align:right">小计</td><td><b>8,904.00</b></td></tr>
+      <tr><td colspan="4" style="text-align:right"><b>批次总合计（3 人 · 60 行）</b></td><td><b>30,959.50</b></td></tr>
+    </table>
+    <div class="sub">制表：李财务　　审核：____________　　出纳：____________　（连续纸按员工分页，逐员工撕分随工资发放）</div>
+  </div>
+  <ul>
+    <li><b>完整性要求：</b>汇总清单必须包含批次下所有员工的所有明细行（不可只打小计）；员工小计、批次总合计均为 SQL SUM，与预览页、个人 wage_slip 三方勾稽相等</li>
+    <li><b>分页规则：</b>每位员工从新页开始（hiprint 分组分页），页脚"第 X 页 / 共 Y 页"；连续纸针式逐员工撕分，个人页可单独发放</li>
+    <li>确认（pending → settled）前打单供核对；确认后重打会带"已结算 · 结算日期"字样，两种内容模板同一套占位符</li>
+  </ul>
+
+  <h3>8.4 实现要点</h3>
+  <table>
+    <tr><th style="width:150px">项</th><th>规则</th></tr>
+    <tr><td><b>模板管理</b></td><td>模板 JSON 存 <code>print_templates</code>（code 唯一）；PC 端嵌入 hiprint 可视化设计器（<code>/sys/print-templates</code>，sys_admin 权限）；保存自动 <code>version+1</code> 并记审计（before/after JSON）；打印数据接口返回模板 version 供前端缓存失效</td></tr>
+    <tr><td><b>PC 静默打印</b></td><td>hiprint 配套本地客户端（.websocket 连接）；打印动作记审计（print.count 不限，重打用于核对）；打印失败提示"本地打印服务未启动"</td></tr>
+    <tr><td><b>移动端 PDF</b></td><td><code>GET /docs/pdf/:type/:id</code> → puppeteer <b>单例</b>渲染同一套模板 HTML；同单据 + 同模板 version 结果缓存 5 分钟；下载走浏览器/APP 文件系统</td></tr>
+    <tr><td><b>打印与状态</b></td><td>打印不改变单据状态（拣货单可重复打）；wage_slip 在 pending（核对用）与 settled（归档用）两阶段均可打印，内容自动带结算日期</td></tr>
+    <tr><td><b>纸张适配</b></td><td>同一 code 支持 A4 / 80mm 两套布局时，按 <code>templates.papers[]</code> 数组存多套 JSON，前端按设备选择（v1.5 §11 拣货单双纸型）</td></tr>
+  </table>
+</section>
+<section id="s9">
+  <h2><span class="no">9</span>非功能设计</h2>
+
+  <h3>9.1 幂等与防重复提交</h3>
+  <table>
+    <tr><th style="width:170px">场景</th><th>机制</th></tr>
+    <tr><td>一般 POST 写操作</td><td>幂等键详见 4.4（Idempotency-Key + idempotency_records：processing 返回 1302 / done 返回原单）；前端按钮 loading 锁定 + 每次提交生成 UUID</td></tr>
+    <tr><td>工资批量结算</td><td><b>三层防重复</b>（v1.5 冻结）：① 明细条件更新 <code>WHERE settlement_id IS NULL AND status='active'</code> 行数校验，不符整批回滚（1307）② 预览/生成时校验员工期间预提余额 &gt; 0，为 0 拒绝 ③ 批次生成幂等键；月度与日期圈选范围<b>可重叠不冲突</b>（同一明细只会被第一个结算锁定）</td></tr>
+    <tr><td>弱网移动端</td><td>提交失败自动存草稿（同幂等键）；恢复后重试队列提示；GET 自动重试 1 次</td></tr>
+    <tr><td>预警 cron / 账单生成</td><td>cron 任务执行前写运行标记（同日同任务只跑一次）；<code>bills UNIQUE(customer_id, period)</code> DB 兜底（3.11 ★）</td></tr>
+  </table>
+
+  <h3>9.2 并发控制</h3>
+  <ul>
+    <li><b>事务边界：</b>所有多表写操作在 service 层单事务（<code>withTransaction</code>，C1 组件）；任一步失败整体回滚——"半审核""半结算"状态不可能存在</li>
+    <li><b>库存扣减：</b>SQL 条件更新 <code>UPDATE stock SET qty = qty - :n WHERE ... AND qty &gt;= :n</code>，行数=0 即返回 1203（库存不足），杜绝并发负库存</li>
+    <li><b>均价更新：</b>同物料并发入库用 <code>pg_advisory_xact_lock(material_id)</code> 串行化重算（v1.5 §8 精度规范）</li>
+    <li><b>乐观锁：</b>档案编辑带 <code>version</code>（PUT 校验不符返回 1304）；单据状态流转用状态机条件更新（如 <code>WHERE status='confirmed'</code>），冲突返回 1309/1204</li>
+    <li><b>死锁：</b>Prisma 超时 5s + 死锁自动重试 2 次（间隔退避），仍失败返回 1501 并记 error 日志</li>
+  </ul>
+
+  <h3>9.3 精度七层防线（v1.5 §8 冻结，实现落点）</h3>
+  <table>
+    <tr><th style="width:60px">层</th><th>规则</th><th style="width:220px">实现落点（本篇）</th></tr>
+    <tr><td>① 数据库</td><td>金额 NUMERIC(14,2) / 单价 NUMERIC(14,4) / 数量 NUMERIC(14,3)</td><td>§3 各表字段定义</td></tr>
+    <tr><td>② 后端运算</td><td>decimal.js，禁止 number 直算</td><td>C5 组件 + lint 规则（§2.4）</td></tr>
+    <tr><td>③ API 传输</td><td>金额数量一律字符串</td><td>§4.1 统一约定 + DTO 序列化</td></tr>
+    <tr><td>④ 聚合</td><td>SQL SUM（含 sum 合计行），禁止前端累加</td><td>§4.1 列表 sum 字段</td></tr>
+    <tr><td>⑤ 取整</td><td>ROUND_HALF_UP 仅最终展示/落库一步取整，中间不取整</td><td>C5 <code>roundHalfUp</code></td></tr>
+    <tr><td>⑥ 打印</td><td>大写金额由后端在 ROUND 后生成</td><td>§8.2 amount_cn</td></tr>
+    <tr><td>⑦ 前端展示</td><td>只渲染不计算；包装换算展示由后端 qty_display 提供</td><td>§7.1 / §8.2</td></tr>
+  </table>
+
+  <h3>9.4 安全清单</h3>
+  <ul>
+    <li>密码：初始 6 位数字；自设 ≥8 位不限复杂度；bcrypt(cost≥10)；重置 → token_version+1 全端失效；首登强制改密（1103 拦截）</li>
+    <li>登录防护：失败 5 次锁 15 分钟（1102）；/auth/login 限流 5 次/分/IP（1104）；登录日志含 IP（§6.5）</li>
+    <li>越权：所有 /me/* 接口后端强制 employee_id = 当前用户绑定员工；计件产品白名单防止跨员工价格泄露（§7.6）</li>
+    <li>注入与 XSS：Prisma 参数化 + 查询字段白名单（1003）；前端不渲染富文本 HTML；上传文件类型/大小校验（jpg/png/webp ≤3MB）+ 路径穿越防护 + 重命名为 UUID</li>
+    <li>密钥管理：只在后端 .env（git 忽略 + example 模板）；前端零密钥；JWT secret ≥32 位随机</li>
+    <li>传输：全站 HTTPS（Nginx 终止）；refreshToken httpOnly + Secure + SameSite=Strict（Web）/ SecureStorage（APP）</li>
+    <li>审计：红冲/改价/重置密码/库存调整/审核/结算确认全覆盖（§6.5），与业务同事务</li>
+  </ul>
+
+  <h3>9.5 备份与恢复</h3>
+  <ul>
+    <li>pg_dump 每日 01:30 全量（cron），保留 7 天滚动 + 每月 1 日一份留 30 天；备份完成/失败写日志并通知 sys_admin</li>
+    <li><b>每季度恢复演练</b>到临时库：验证备份可用性 + 关键表行数抽样比对，演练结果记审计</li>
+    <li>文件（报工照片）：每日 rsync 至备份盘，与数据库备份同保留策略</li>
+    <li>RPO ≤24h（MVP 可接受，单企业部署）；恢复步骤文档化：停服务 → 恢复库 → 重放当日备份后二进制日志（如启用）→ 校验</li>
+  </ul>
+
+  <h3>9.6 性能预算（单企业部署规模）</h3>
+  <table>
+    <tr><th style="width:230px">指标</th><th>预算</th></tr>
+    <tr><td>用户规模</td><td>&lt;50 账号并发在线；峰值 QPS &lt;10（报工高峰晚 19-21 点）</td></tr>
+    <tr><td>接口响应</td><td>P95 &lt;500ms（列表页含 sum 聚合）；打印数据接口 P95 &lt;800ms；PDF 生成 P95 &lt;3s（含缓存命中判断）</td></tr>
+    <tr><td>分页上限</td><td>pageSize ≤100（超出按 100 处理）；导出上限 1 万行</td></tr>
+    <tr><td>连接池</td><td>Prisma pool = 10（MVP 足够，NestJS 单进程）</td></tr>
+    <tr><td>通知轮询</td><td>移动端 30s 未读数轻查询（走 3.11 ★ notifications 索引）</td></tr>
+  </table>
+</section>
+
+<section id="s10">
+  <h2><span class="no">10</span>文档关系与变更记录</h2>
+
+  <h3>10.1 三份文档的定位</h3>
+  <table>
+    <tr><th style="width:280px">文档</th><th>定位</th><th style="width:190px">谁读</th></tr>
+    <tr><td><b>erp-mvp-design.html（v1.5，冻结）</b></td><td><b>业务唯一事实源</b>：范围、角色权限矩阵、状态机、DDL、精度规则、打印规格、里程碑。业务规则有争议时以此为准</td><td>所有人（先读）</td></tr>
+    <tr><td><b>erp-dev-parallel-design.html（v1.0）</b></td><td><b>工程拆分与排期</b>：C1-C12 组件、M1-M11 模块、契约接口、依赖矩阵、三泳道并行计划。任务分配与联调顺序以此为准</td><td>所有人（第二读）</td></tr>
+    <tr><td><b>本篇 erp-full-spec.html（v1.0）</b></td><td><b>实现细节规格</b>：字段级表格、全量 API 与 JSON 示例、错误码与日志格式、三端页面仿真、打印数据上下文。写代码时对照</td><td>开发（随手查）</td></tr>
+  </table>
+  <p>阅读顺序：v1.5（懂业务）→ 并行篇（知道自己做什么）→ 本篇（知道怎么做）。三份文档由同一人维护版本，避免口径漂移。</p>
+
+  <h3>10.2 本篇补充项汇总（★，需评审确认）</h3>
+  <p>本篇不改任何 v1.5 冻结决策；以下 ★ 项为 v1.5 未覆盖、为实现所必须明确的细节，<b>请评审确认后并入 v1.6</b>：</p>
+  <table>
+    <tr><th style="width:110px">类别</th><th>补充内容</th><th style="width:110px">位置</th></tr>
+    <tr><td>错误码</td><td>新增 12 个（1002/1003/1103/1104/1205/1304/1305/1306/1307/1308/1402/1501），分段 1000-1501；v1.5 已有码值不变</td><td>§5.2</td></tr>
+    <tr><td>索引约束</td><td>新增 10 组索引 / 1 组 UNIQUE（账单幂等兜底）</td><td>§3.11</td></tr>
+    <tr><td>权限码</td><td>补明确矩阵未覆盖的码：base:material/warehouse/employee 系、process:task 系、bill:view、alert:view、wage:settle:print、system:user:reset-password、sys:log:read 等</td><td>§4.2</td></tr>
+    <tr><td>新增接口</td><td>GET /app/version（APP 版本检查）、GET /docs/pdf/:type/:id（移动端 PDF）、GET /print/bill-statement/:billId（对账单打印数据）、POST /wage/settlements/batches/:id/confirm（批次批量确认）、GET /sys/logs（运行日志查询）</td><td>§4.2</td></tr>
+    <tr><td>打印模板</td><td>bill_statement 客户对账单（第 6 个模板）</td><td>§8.1</td></tr>
+    <tr><td>枚举明确</td><td>stock_ledger.biz_type 补 opening；payment/receipt.method 补 other</td><td>§3.12</td></tr>
+    <tr><td>日志规范</td><td>pino 字段表、traceId 贯穿、审计 action 清单与脱敏规则、每日巡检（均为 v1.5 §7/§12 的细化，无冲突）</td><td>§6</td></tr>
+    <tr><td>移动端 Tab</td><td>明确为"3+1"形态（记工/我的钱/通知 + 审核人第 4 枚审核）——v1.5 §10.1 文字为"两枚+审核"，与 v1.5 §10.2 页面清单及原型图（三枚）不一致，本篇按原型图统一为 3+1</td><td>§7.4</td></tr>
+    <tr><td>系统页面</td><td>/sys/logs 运行日志查询页（sys_admin 免登服务器排障）</td><td>§7.2/§7.3</td></tr>
+  </table>
+
+  <h3>10.3 冲突裁决规则</h3>
+  <ul>
+    <li>本篇与 v1.5 表述不一致时，<b>以 v1.5 为准</b>（本篇仅一处主动澄清：移动端 Tab 3+1，见上表）</li>
+    <li>★ 补充项在评审通过前：按本篇实现（否则无法开发），但评审若否决，改动走本篇变更记录 + 代码同步调整</li>
+    <li>接口路径 / 字段名 / 错误码与代码不一致时，<b>以代码 + 本篇双向同步</b>（改代码必须同步改文档，PR 检查项）</li>
+    <li>契约接口（moveStock/getPrice 等 5 个）签名变更：必须先改并行篇第 4 节并通知全部泳道（并行篇铁律）</li>
+  </ul>
+
+  <h3>10.4 变更记录</h3>
+  <table>
+    <tr><th style="width:90px">版本</th><th style="width:110px">日期</th><th>内容</th></tr>
+    <tr><td>v1.0</td><td>2026-10-15</td><td>初版：§1 三端开发目标 / §2 工程结构 / §3 字段级数据库设计（28 表）/ §4 全量 API 与 16 组 JSON 示例 / §5 错误处理格式（分段 21 码）/ §6 日志格式（pino + traceId + 审计）/ §7 三端页面仿真（PC 6 屏 + 移动 6 屏）/ §8 打印模板规格（6 模板 + 3 排版仿真）/ §9 非功能 / §10 文档关系与 ★ 评审清单</td></tr>
+  </table>
+  <div class="callout c-ok"><b>下一步：</b>① 评审 §10.2 ★ 清单（一次会议过完）→ 通过项并入 v1.6 冻结 ② 按《并行开发计划》三泳道开工（A 后端核心 / B 后端业务打印 / C 前端双端），契约接口先行 ③ M1 联调以本篇 §4 JSON 示例为 mock 依据。</div>
+</section>
+</main>
+</div>
+</body>
+</html>
