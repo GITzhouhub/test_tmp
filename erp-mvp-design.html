@@ -143,7 +143,7 @@ table.mtab td{padding:7px 10px;white-space:nowrap}
 <section id="s0">
   <h1 style="font-size:24px;margin-bottom:6px">仓储进销存 ERP — MVP 详细设计文档</h1>
   <div class="meta">
-    <span>版本 <b>v1.3（评审更新：含九轮评审意见，设计冻结）</b></span><span>日期 <b>2026-10-15</b></span>
+    <span>版本 <b>v1.4（补预提工资与月结结算）</b></span><span>日期 <b>2026-10-15</b></span>
     <span>形态 <b>单体 NestJS + PG / Vue3 双端</b></span><span>多租户 <b>本期不含，代码预留</b></span>
   </div>
   <p>本文档整合此前所有设计结论，作为 MVP 开发的唯一依据。评审通过后按第 14 节里程碑推进。参考对象：jshERP（单据-流水绑定、进销存口径）、ERPNext（文档生命周期、价格表、Stock Ledger 结余）。</p>
@@ -424,6 +424,21 @@ CREATE TABLE work_report_items (
   status VARCHAR(10) NOT NULL DEFAULT 'active'         -- active|voided
 );
 CREATE INDEX idx_wri_employee ON work_report_items(report_id);
+-- 预提工资：报工 approved 后明细金额即"预提"（已确认未结算），实时聚合可查
+ALTER TABLE work_report_items ADD COLUMN settlement_id BIGINT;  -- 被哪张结算单锁定，NULL=预提中
+CREATE TABLE wage_settlements (           -- 工资结算单（月结打单确认）
+  id BIGSERIAL PRIMARY KEY, no VARCHAR(40) NOT NULL UNIQUE,   -- WS202610-001
+  employee_id BIGINT NOT NULL,
+  period CHAR(7) NOT NULL,                -- 结算期间 '2026-10'（按 biz_date 归集）
+  total_amount NUMERIC(14,2) NOT NULL,    -- = 该期间 approved 且 settlement_id 为空明细合计
+  settle_date DATE NOT NULL,              -- 指定结算日期（如 11-15 发 10 月工资）
+  status VARCHAR(12) NOT NULL DEFAULT 'draft',  -- draft(锁定待确认) | settled(已结算) | voided
+  remark VARCHAR(500),
+  creator_id BIGINT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  confirmed_by BIGINT, confirmed_at TIMESTAMPTZ,
+  void_reason VARCHAR(200), voided_by BIGINT, voided_at TIMESTAMPTZ
+);
+CREATE INDEX idx_ws_employee ON wage_settlements(employee_id, period);
 -- 计件产品可见性（白名单：不指定=无人可见，防价格泄露）
 CREATE TABLE piece_material_scope (
   id BIGSERIAL PRIMARY KEY,
@@ -495,7 +510,7 @@ CREATE TABLE idempotency_records (
     <tr><td>purchase</td><td><code>purchase:in:*</code> <code>purchase:return:*</code> <code>payment:create</code> <code>base:supplier:*</code> <code>stock:query</code> <code>report:payable:view</code></td><td>本人创建的单据；付款登记限本人</td></tr>
     <tr><td>sales</td><td><code>base:customer:*</code> <code>sales:order:*</code> <code>sales:order:editPrice</code> <code>sales:return:create</code> <code>picking:print</code> <code>print:note:print</code> <code>stock:query</code></td><td>本人创建的单据</td></tr>
     <tr><td>auditor</td><td><code>process:task:view</code> <code>process:audit:confirm</code> <code>process:audit:reject</code> <code>piece:report:view</code> <code>piece:query:*</code></td><td>全部加工单</td></tr>
-    <tr><td>finance</td><td><code>bill:*</code> <code>receipt:*</code> <code>alert:handle</code> <code>piece:summary:view</code> <code>piece:report:view</code> <code>piece:void</code> <code>stock:report:view</code> <code>report:sales:view</code> <code>report:payable:view</code> <code>payment:create</code></td><td>全部</td></tr>
+    <tr><td>finance</td><td><code>bill:*</code> <code>receipt:*</code> <code>alert:handle</code> <code>piece:summary:view</code> <code>piece:report:view</code> <code>piece:void</code> <code>wage:settle:*</code> <code>stock:report:view</code> <code>report:sales:view</code> <code>report:payable:view</code> <code>payment:create</code></td><td>全部</td></tr>
     <tr><td>worker</td><td><code>process:my:list</code> <code>piece:my:report</code> <code>piece:my:withdraw</code> <code>piece:my:query</code></td><td><b>仅本人</b>（service 层强制注入 employee_id 过滤；计件可选产品由 piece_material_scope 白名单控制，响应中仅含"我的工价"）</td></tr>
   </table>
   <div class="callout c-warn"><b>教训（来自 jshERP 源码评审）：</b>jshERP 后端接口只有登录校验无按钮级 RBAC（任意登录用户可调 resetPwd）、MD5 弱哈希、默认密码不强制改、多角色只取第一个。本设计逐一规避：后端强制权限 Guard、bcrypt、must_change_password、多角色取并集。</div>
@@ -507,6 +522,7 @@ CREATE TABLE idempotency_records (
     <tr><th style="width:110px">单据</th><th>状态流转</th><th>关键约束</th></tr>
     <tr><td>销售订单</td><td><span class="tag t-gray">draft</span>→<span class="tag t-blue">confirmed</span>→<span class="tag t-orange">picking</span>→<span class="tag t-green">shipped</span>→<span class="tag t-green">settled/closed</span></td><td>作废仅 draft；出库后修改只能走销售退货红冲；confirmed 时锁价格快照</td></tr>
     <tr><td>报工单</td><td><span class="tag t-orange">submitted</span>→<span class="tag t-green">approved</span> / <span class="tag t-red">rejected</span>；approved 后可 <span class="tag t-red">voided</span></td><td>审核可改行数量（≤提交数，差异原因必填），单价不可改（提交时点"我的工价"快照）；approved 即锁定；作废=红冲单事务（成品仓−N→员工仓+N→明细行 voided→任务回 submitted），工钱实时聚合自愈；员工提交后审核前可自行撤回重新编辑</td></tr>
+    <tr><td>工资结算单</td><td><span class="tag t-gray">draft</span>(锁定明细)→<span class="tag t-green">settled</span>；settled 后可 <span class="tag t-red">voided</span></td><td>生成=按期间锁定 approved 未结算明细（写 settlement_id，防重复结算）；<b>打单（wage_slip）→ 指定 settle_date 确认结算</b>；作废=红冲（明细回预提，可重新结算）；draft 期间该批明细不可再入其他结算单；预提余额=SUM(approved 且 settlement_id 为空)</td></tr>
     <tr><td>账单</td><td><span class="tag t-blue">confirmed</span>→<span class="tag t-orange">partial_paid</span>→<span class="tag t-green">settled</span></td><td>overdue 由预警 cron 计算，不落库状态；收款累计不可超额</td></tr>
     <tr><td>所有单据</td><td>—</td><td><b>不可物理删除</b>，只可作废/红冲；作废权限独立控制并写审计；统一三时间：<code>biz_date</code>（业务时间，可改限7天内）/<code>created_at</code>（录入时间，不可改）/环节时间（submitted_at 等，自动记）</td></tr>
   </table>
@@ -548,7 +564,11 @@ CREATE TABLE idempotency_records (
     <tr><td>POST</td><td>/piece/reports/:id/withdraw</td><td>piece:my:withdraw</td><td>审核前自行撤回重新编辑</td></tr>
     <tr><td>POST</td><td>/piece/reports/:id/approve</td><td>process:audit:confirm</td><td>整单审核，行级可改数量（原因必填），单事务库存联动</td></tr>
     <tr><td>POST</td><td>/piece/reports/:id/void</td><td>piece:void</td><td>作废红冲（原因必填，单事务回滚库存+工钱）</td></tr>
-    <tr><td>GET</td><td>/piece/my/summary?month=2026-10</td><td>piece:my:query</td><td>本人当月工钱与明细</td></tr>
+    <tr><td>GET</td><td>/piece/my/summary?month=2026-10</td><td>piece:my:query</td><td>本人当月工钱（区分预提/已结算）与明细</td></tr>
+    <tr><td>POST</td><td>/wage/settlements</td><td>wage:settle:create</td><td>生成结算单（员工+期间；锁定该期间 approved 未结算明细）</td></tr>
+    <tr><td>POST</td><td>/wage/settlements/:id/confirm</td><td>wage:settle:confirm</td><td>确认结算，body 指定 settle_date（打单后核对再确认）</td></tr>
+    <tr><td>POST</td><td>/wage/settlements/:id/void</td><td>wage:settle:void</td><td>作废红冲（明细回预提，可重新结算）</td></tr>
+    <tr><td>GET</td><td>/wage/accrued?employeeId=</td><td>wage:settle:create</td><td>预提工资余额查询（员工/全员，实时聚合）</td></tr>
     <tr><td>GET</td><td>/piece/report?groupBy=employee|material|month</td><td>piece:report:view</td><td>计件统计报表（员工/物料/月趋势/员工×月矩阵）+ /export 导出</td></tr>
     <tr><td>GET</td><td>/stock?groupBy=warehouse|material</td><td>stock:query</td><td>库存总览三视图（明细/按仓库/按物料）+ /export</td></tr>
     <tr><td>GET</td><td>/stock/ledger</td><td>stock:query</td><td>库存流水（业务类型/单号/时间筛选，显示结余）</td></tr>
@@ -601,7 +621,7 @@ CREATE TABLE idempotency_records (
     <tr><td>采购</td><td>采购入库 / 采购退货 / 付款登记 / 应付报表</td><td>关联供应商；入库即产生流水并更新均价；付款一付多单核销；应付余额实时聚合</td></tr>
     <tr><td>销售</td><td>销售订单 / 拣货 / 销售退货</td><td>明细行选择包装（件/袋/箱）自动换算；<b>列头强制区分：数量(含包装名，如"5袋")/单价(元/袋)/总价(元)，参考件价灰字辅助</b>；合计行 SQL 聚合；价格自动带出（等级计价，draft 可改价需权限+审计，confirm 锁定）；拣货页打印拣货单→确认出库</td></tr>
     <tr><td>加工</td><td>配送单（发料管理）</td><td>发料出库→员工仓在制；打印配送单</td></tr>
-    <tr><td>计件</td><td>报工审核 / 记录查询 / 统计报表</td><td>审核页显示照片、行级改数量（原因必填）；报表四视图（明细/按员工/按物料/员工×月矩阵），SQL 聚合+导出</td></tr>
+    <tr><td>计件</td><td>报工审核 / 记录查询 / 统计报表 / <b>工资结算</b></td><td>审核页显示照片、行级改数量（原因必填）；报表四视图（明细/按员工/按物料/员工×月矩阵），SQL 聚合+导出；<b>结算页：选员工+期间→预览预提合计→生成结算单→打单（wage_slip）→指定结算日期确认；作废红冲明细回预提；预提余额列表（全员）</b></td></tr>
     <tr><td>报表</td><td>销售报表 / 毛利报表</td><td>销售（按客户/月/物料：销售额、退货净额）；毛利（销售额−出库成本−计件工钱，按月/按客户）；统一查询规范+导出</td></tr>
     <tr><td>账单</td><td>账单 / 收款 / 预警中心 / 通知中心</td><td>账单明细穿透销售订单；首期账单并入客户期初欠款；通知列表点击穿透单据</td></tr>
     <tr><td>系统</td><td>用户 / 角色总览 / 操作日志 / 打印模板</td><td>角色矩阵只读；重置密码二次确认</td></tr>
@@ -651,7 +671,7 @@ CREATE TABLE idempotency_records (
     <tr><td>登录/改密</td><td>同 PC 策略；APP 端 refreshToken 存 SecureStorage</td></tr>
     <tr><td><b>报工首页（worker 默认页）</b></td><td>直接显示我的报工历史（倒序）：日期/产品/数量/金额/状态；右下角浮动"＋"小圆钮打开新报工；状态用人话：等确认(黄)/已确认✓(绿)/没通过(红)</td></tr>
     <tr><td>新建报工</td><td>选产品（白名单过滤+我的常用排序+产品图）→ 单价绿色只读（我的工价）→ 手机系统键盘输数量 → 多行"+添加产品" → 合计预览 → 拍照(≤3)/备注 → 提交；失败存草稿同幂等键重试</td></tr>
-    <tr><td>我的工钱</td><td>月汇总大数字卡 + 明细列表（报工单号/产品/数量/单价/金额）；仅本人数据；默认字体调大一档</td></tr>
+    <tr><td>我的工钱</td><td>月汇总大数字卡（<b>还没发的（预提）/ 已经发了的 分开两个数字</b>）+ 明细列表（报工单号/产品/数量/单价/金额）；仅本人数据；默认字体调大一档</td></tr>
     <tr><td>审核（auditor）</td><td>待审列表 → 详情（含照片放大）→ 整单通过 / 行级改数量（原因必填）/ 驳回（大白话意见必填）</td></tr>
     <tr><td>单据查看</td><td>拣货单 / 配送单 / 账单 移动端渲染 + PDF</td></tr>
     <tr><td>通知中心</td><td>角标未读数（登录后 30s 轮询）→ 列表 → 点击穿透单据；<b>不做 APP 弹窗推送</b>，后期可接微信公众号/小程序（emitter 插件式）</td></tr>
@@ -708,6 +728,7 @@ CREATE TABLE idempotency_records (
     <tr><td><code>pick_list</code></td><td>A4 激光 或 80mm 热敏</td><td>单号/库位/物料编码名称/应拣数量/条码（拣货扫码核对）</td></tr>
     <tr><td><code>duplicate_note</code></td><td>针式 LQ-630K · 连续纸二联复写（白联客户/红联存根）</td><td>客户信息/明细四列：<b>数量(含包装"5袋")/单价(元/袋)/总价(元)</b>/金额大写/签字栏；<b>打一遍自然复写</b></td></tr>
     <tr><td><code>delivery_note</code></td><td>针式或热敏</td><td>加工任务/员工地址/发料数量/签收栏</td></tr>
+    <tr><td><code>wage_slip</code></td><td>A4 或针式</td><td>工资结算单：员工/期间/明细（报工单号×金额）/预提合计/<b>结算日期（可指定）</b>/签字栏（员工签收+经手）；结算前打单核对，确认后归档</td></tr>
   </table>
   <ul>
     <li>模板 JSON 存 <code>print_templates</code>，PC 端嵌入 hiprint 可视化设计器维护（sys_admin 权限），改动自动 +version</li>
@@ -770,13 +791,13 @@ CREATE TABLE idempotency_records (
     <tr><th>里程碑</th><th>交付</th><th>验收标准</th></tr>
     <tr><td>M1 基础+库存</td><td>认证/账号/RBAC、基础数据、库存+流水+调拨、审计日志</td><td>权限矩阵全接口生效；并发扣减无负库存；traceId 贯穿</td></tr>
     <tr><td>M2 进销存+打印</td><td>采购/销售/退货、计价引擎（含包装换算）、拣货单+二联单打印、<b>移动加权成本 + 出库成本快照</b></td><td>金额对账零误差（SQL 聚合 vs 单据合计）；打印模板可维护；均价更新并发正确</td></tr>
-    <tr><td>M3 加工+计件+移动端</td><td>配送单（发料）、报工单（员工自主多行）、审核（行级改数量）、计件工资、移动端（报工/工钱/审核/通知）</td><td>审核事务原子性验证（库存联动+计件入账+通知）；弱网断点提交不丢数据；计件产品白名单不泄露价格</td></tr>
+    <tr><td>M3 加工+计件+移动端</td><td>配送单（发料）、报工单（员工自主多行）、审核（行级改数量）、计件工资、<b>工资结算（预提→月结打单→指定日期结算→红冲）</b>、移动端（报工/工钱/审核/通知）</td><td>审核事务原子性验证（库存联动+计件入账+通知）；弱网断点提交不丢数据；计件产品白名单不泄露价格；<b>结算锁定防重复、作废回预提勾稽</b></td></tr>
     <tr><td>M4 账单+预警+报表</td><td>月度账单（含客户期初欠款并入）、收款、供应商付款/应付报表、销售报表、毛利报表、账期/发货预警、备份恢复演练</td><td>预警 cron 幂等不重发；毛利=销售−成本−工钱可对账追溯；应付余额=期初+采购−付款−退货勾稽相等；恢复演练通过</td></tr>
   </table>
-  <div class="callout c-ok" style="margin-top:16px"><b>v1.3 评审更新摘要（九轮意见全部并入，功能覆盖自审后冻结）：</b>v1.2 全部内容（报工单模型/白名单/通用字段/三时间/通知/极简员工端/包装体系/密码策略）+ 本轮补齐 ERP 四缺口：<b>① 成本毛利</b>（materials.avg_cost 移动加权、订单行成本快照、毛利报表=销售−出库成本−计件工钱）<b>② 销售报表</b>（按客户/月/物料，含退货净额）<b>③ 客户期初欠款</b>（customers.opening_balance 并入首期账单）<b>④ 供应商应付款</b>（purchase_orders.pay_status、payment_records/refs 一付多单核销、应付报表）+ 补齐退货/付款/报表 API 与权限码。<b>设计已冻结，确认 5 项（角色矩阵/状态机/精度规则/针式打印机/里程碑顺序）后启动 M1。</b></div>
+  <div class="callout c-ok" style="margin-top:16px"><b>v1.4 更新：</b>补<b>预提工资与月结结算</b>——报工 approved 即预提（明细 settlement_id 为空实时可查）；月结生成结算单锁定期间明细（防重复结算）→ 打 wage_slip 工资结算单核对 → <b>指定 settle_date 确认结算</b>；作废红冲明细回预提可重结；员工端"我的钱"区分 未发/已发。<br><b>v1.3 摘要：</b>成本毛利（avg_cost 移动加权/成本快照/毛利报表）、销售报表、客户期初欠款、供应商应付款（付款核销/应付报表）四缺口补齐 + 退货付款报表 API。<b>设计冻结，确认 5 项（角色矩阵/状态机/精度规则/针式打印机/里程碑顺序）后启动 M1。</b></div>
 </section>
 
-<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.3 · 2026-10-15 · 设计冻结</p>
+<p style="color:var(--text-3);font-size:12px;text-align:center;padding:8px 0 24px">仓储进销存 ERP MVP 详细设计文档 v1.4 · 2026-10-15 · 设计冻结</p>
 </main>
 </div>
 </body>

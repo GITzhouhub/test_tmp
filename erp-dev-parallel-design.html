@@ -75,10 +75,10 @@
 
 <header>
   <h1>仓储进销存 ERP — 开发详细设计：组件拆分与并行开发计划</h1>
-  <p>本文档是《ERP MVP 设计文档 v1.3》的工程实施篇：将系统拆分为 12 个基础组件 + 11 个功能模块，定义契约接口、依赖矩阵、优先级（P0-P3）与三泳道并行开发计划。</p>
+  <p>本文档是《ERP MVP 设计文档 v1.4》的工程实施篇：将系统拆分为 12 个基础组件 + 11 个功能模块，定义契约接口、依赖矩阵、优先级（P0-P3）与三泳道并行开发计划。</p>
   <div class="meta">
     <span>版本 <b>v1.0</b></span><span>日期 <b>2026-10-15</b></span>
-    <span>依据 <b>erp-mvp-design.html v1.3（已冻结）</b></span><span>形态 <b>NestJS 单体 + monorepo</b></span>
+    <span>依据 <b>erp-mvp-design.html v1.4（已冻结）</b></span><span>形态 <b>NestJS 单体 + monorepo</b></span>
   </div>
   <div class="toc">
     <a href="#s1"><b>1</b>分层总览与拆分原则</a>
@@ -157,7 +157,7 @@
     <tr><td><b>M4</b></td><td><b>purchase 采购</b></td><td><span class="tag t-p1">P1</span></td><td>采购入库（含移动加权均价更新，同事务）、采购退货红字（冲库存+冲应付+成本冲回）</td><td class="dep">M2(moveStock), M1; C6,C7</td><td>采购单查询（应付模块聚合用）</td></tr>
     <tr><td><b>M5</b></td><td><b>sales 销售</b></td><td><span class="tag t-p1">P1</span></td><td>销售订单（包装计价、draft 改价权限+审计、confirm 锁快照、出库成本快照）、拣货执行（事务出库）、销售退货红字、二联单数据组装</td><td class="dep">M2(moveStock), M3(getPrice), M1; C6,C7,C10</td><td>销售单查询（账单/报表聚合用）</td></tr>
     <tr><td><b>M6</b></td><td><b>process 配送发料</b></td><td><span class="tag t-p2">P2</span></td><td>配送单（多行发料）：确认发料 = 实体仓→员工虚拟仓 moveStock；配送单打印数据</td><td class="dep">M2(moveStock), M1(getVirtualWarehouseId); C10</td><td>员工仓在制量查询</td></tr>
-    <tr><td><b>M7</b></td><td><b>piece 报工计件</b></td><td><span class="tag t-p2">P2</span></td><td>报工单（员工多行自主提交、白名单产品+我的工价、提交前撤回）；审核（行级改数量原因必填、单事务：output_material_id 库存联动 + 计件入账 + 通知）；作废红冲；我的工钱；计件报表（员工/物料/月矩阵）</td><td class="dep">M2(moveStock), M1; C5,C6,C7,C9, C12</td><td>计件工钱聚合（毛利报表用）</td></tr>
+    <tr><td><b>M7</b></td><td><b>piece 报工计件</b></td><td><span class="tag t-p2">P2</span></td><td>报工单（员工多行自主提交、白名单产品+我的工价、提交前撤回）；审核（行级改数量原因必填、单事务：output_material_id 库存联动 + 计件入账 + 通知）；作废红冲；<b>预提工资与月结结算（wage_settlements：锁定明细防重复→打 wage_slip→指定日期确认→红冲回预提）</b>；我的工钱（未发/已发）；计件报表（员工/物料/月矩阵）</td><td class="dep">M2(moveStock), M1; C5,C6,C7,C9,C10, C12</td><td>计件工钱聚合（毛利报表用）；预提/已结算余额</td></tr>
     <tr><td><b>M8</b></td><td><b>bill 账单</b></td><td><span class="tag t-p2">P2</span></td><td>月度账单生成（幂等；首期并入客户期初欠款）、收款登记（不可超额）、账单查询</td><td class="dep">M5(销售查询), M1; C6,C9</td><td>应收汇总</td></tr>
     <tr><td><b>M9</b></td><td><b>payable 应付</b></td><td><span class="tag t-p2">P2</span></td><td>供应商付款登记（一付多单核销 payment_refs）、应付报表（期初+采购−付款−退货实时聚合）</td><td class="dep">M4(采购查询), M1; C6</td><td>应付汇总</td></tr>
     <tr><td><b>M10</b></td><td><b>report 报表</b></td><td><span class="tag t-p3">P3</span></td><td>销售报表（客户/月/物料，退货净额）、毛利报表（销售−出库成本−计件工钱）；全部只读、走各模块契约 service、SQL 聚合</td><td class="dep">M4,M5,M7 契约; C8</td><td>—（终端消费方）</td></tr>
@@ -228,7 +228,7 @@ updateAvgCost(tx, {materialId, inQty, inUnitPrice}): Promise&lt;void&gt;</code><
     <div class="lname2">A 后端核心</div>
     <div class="cell"><b>C1-C7 全部</b><span>db/auth/rbac/error/decimal/幂等/审计</span></div>
     <div class="cell"><b>M2 stock + M1 base</b><span>moveStock 契约、三视图、基础档案 API</span></div>
-    <div class="cell"><b>M6 process + M7 piece</b><span>配送发料、报工审核事务、工钱</span></div>
+    <div class="cell"><b>M6 process + M7 piece</b><span>配送发料、报工审核事务、工钱、<b>月结结算（wage_slip 打单）</b></span></div>
     <div class="cell"><b>M10 report</b><span>销售/毛利报表 SQL 聚合</span></div>
     <div class="lname2">B 后端业务+打印</div>
     <div class="cell"><b>shared 包 + 契约定义</b><span>类型/权限码/错误码/mock（P0 交付物）</span></div>
